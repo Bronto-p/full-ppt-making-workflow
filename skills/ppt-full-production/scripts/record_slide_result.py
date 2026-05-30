@@ -33,6 +33,7 @@ FORBIDDEN_BACKEND_TERMS = (
     "manual",
     "script render",
 )
+ALLOWED_BACKEND_IDS = {"built-in-image-tool", "cli-api-fallback", "custom-image-backend"}
 
 
 def _validate_backend(backend: str) -> str:
@@ -43,11 +44,6 @@ def _validate_backend(backend: str) -> str:
     for term in FORBIDDEN_BACKEND_TERMS:
         if term in lowered:
             raise SystemExit(f"Forbidden backend for final slide image: {backend}")
-    if "image" not in lowered and "built-in" not in lowered:
-        raise SystemExit(
-            "--backend-used must name the selected image backend, such as "
-            "`built-in image tool` or `scripts/image_gen.py`."
-        )
     return value
 
 
@@ -62,6 +58,19 @@ def _backend_family(value: str) -> str:
     if "image_gen" in lowered:
         return "built-in-image-tool"
     return ""
+
+
+def _backend_id(value: str) -> str:
+    return _backend_family(value) or "custom-image-backend"
+
+
+def _validate_backend_id(value: str | None, backend_used: str) -> str:
+    backend_id = value.strip() if value else _backend_id(backend_used)
+    if backend_id not in ALLOWED_BACKEND_IDS:
+        raise SystemExit(
+            f"Invalid backend id `{backend_id}`. Use one of: {', '.join(sorted(ALLOWED_BACKEND_IDS))}."
+        )
+    return backend_id
 
 
 def _normalized_backend_label(value: str) -> str:
@@ -104,6 +113,22 @@ def _expected_backend_labels(jobs: dict, slide: dict, prompt_job: dict) -> list[
     return unique_labels
 
 
+def _expected_backend_ids(jobs: dict, prompt_job: dict, expected_labels: list[str]) -> list[str]:
+    ids: list[str] = []
+    for value in (jobs.get("selected_backend_id"), prompt_job.get("expected_backend_id")):
+        if isinstance(value, str) and value.strip():
+            ids.append(value.strip())
+    for label in expected_labels:
+        family = _backend_family(label)
+        if family:
+            ids.append(family)
+    unique_ids: list[str] = []
+    for backend_id in ids:
+        if backend_id not in unique_ids:
+            unique_ids.append(backend_id)
+    return unique_ids
+
+
 def _matched_expected_backend(backend_used: str, expected_labels: list[str]) -> str | None:
     if not expected_labels:
         return None
@@ -118,6 +143,17 @@ def _matched_expected_backend(backend_used: str, expected_labels: list[str]) -> 
     raise SystemExit(
         "Backend mismatch: worker reported "
         f"`{backend_used}`, but slide job expects one of: {', '.join(expected_labels)}"
+    )
+
+
+def _matched_expected_backend_id(backend_id: str, expected_ids: list[str]) -> str | None:
+    if not expected_ids:
+        return None
+    if backend_id in expected_ids:
+        return backend_id
+    raise SystemExit(
+        "Backend mismatch: worker reported backend_id "
+        f"`{backend_id}`, but slide job expects one of: {', '.join(expected_ids)}"
     )
 
 
@@ -155,9 +191,14 @@ def main() -> int:
     parser.add_argument("--slide", required=True, help="slide_01 or 1")
     parser.add_argument("--agent-id", required=True)
     parser.add_argument("--backend-used", required=True)
+    parser.add_argument(
+        "--backend-id",
+        choices=sorted(ALLOWED_BACKEND_IDS),
+        help="Stable backend family id. Prefer this over relying on free-form backend labels.",
+    )
     parser.add_argument("--selected-source", required=True, help="Generated image selected by the worker.")
     parser.add_argument("--qa-note", required=True)
-    parser.add_argument("--expected-aspect-ratio", choices=["16:9", "4:3"], default="16:9")
+    parser.add_argument("--expected-aspect-ratio", choices=["16:9", "4:3"])
     args = parser.parse_args()
 
     deck_dir = deck_dir_from_target(args.deck)
@@ -172,12 +213,18 @@ def main() -> int:
             )
 
         backend_used = _validate_backend(args.backend_used)
+        backend_id = _validate_backend_id(args.backend_id, backend_used)
         prompt_job = _load_prompt_job(deck_dir, slide)
         expected_backend_labels = _expected_backend_labels(jobs, slide, prompt_job)
-        matched_expected_backend = _matched_expected_backend(backend_used, expected_backend_labels)
+        expected_backend_ids = _expected_backend_ids(jobs, prompt_job, expected_backend_labels)
+        matched_expected_backend_id = _matched_expected_backend_id(backend_id, expected_backend_ids)
+        matched_expected_backend = None
+        if not matched_expected_backend_id:
+            matched_expected_backend = _matched_expected_backend(backend_used, expected_backend_labels)
         source = ensure_file(Path(args.selected_source).expanduser().resolve(), "selected source image")
         width_px, height_px = _image_size(source)
-        _validate_aspect_ratio(source, width_px, height_px, args.expected_aspect_ratio)
+        expected_aspect_ratio = args.expected_aspect_ratio or jobs.get("aspect_ratio") or prompt_job.get("aspect_ratio") or "16:9"
+        _validate_aspect_ratio(source, width_px, height_px, expected_aspect_ratio)
         out_ref = slide.get("out") or f"origin_image/{slide['slide_id']}.png"
         target = resolve_deck_path(deck_dir, out_ref)
         try:
@@ -191,6 +238,7 @@ def main() -> int:
         slide["result"] = {
             "agent_id": args.agent_id,
             "backend_used": backend_used,
+            "backend_id": backend_id,
             "selected_source": str(source),
             "selected_source_size_px": {"width": width_px, "height": height_px},
             "selected_source_sha256": sha256_file(source),
@@ -198,7 +246,10 @@ def main() -> int:
             "final_image_sha256": sha256_file(target),
             "expected_backend": matched_expected_backend,
             "expected_backend_labels": expected_backend_labels,
-            "sample_generation_method_matched": bool(matched_expected_backend),
+            "expected_backend_id": matched_expected_backend_id,
+            "expected_backend_ids": expected_backend_ids,
+            "sample_generation_method_matched": bool(matched_expected_backend or matched_expected_backend_id),
+            "expected_aspect_ratio": expected_aspect_ratio,
             "qa_note": args.qa_note,
             "recorded_at": now_iso(),
         }

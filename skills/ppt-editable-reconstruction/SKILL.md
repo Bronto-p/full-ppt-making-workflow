@@ -53,7 +53,7 @@ Use this skill's local `scripts/` entrypoints whenever compatible. Do not reimpl
 This skill includes `scripts/` wrappers for the page reconstruction scripts from `image-to-editable-ppt`. Use these local script entrypoints for deterministic run/page state, page building, validation, and final assembly:
 
 - `image_to_editable_ppt_runtime.py`: bootstrap/check runtime.
-- `prepare_deck_run.py`: create run/page directories and normalize inputs when compatible.
+- `prepare_deck_run.py`: create run/page directories, normalize inputs, infer slide size, and wire Stage 3 metadata with `--stage3-project` when available.
 - `page_job_status.py`: inspect page dispatch status.
 - `record_page_dispatch.py`: record page worker dispatch.
 - `record_page_result.py`: validate and record page results.
@@ -67,7 +67,13 @@ This skill includes `scripts/` wrappers for the page reconstruction scripts from
 
 Use these local script entrypoints whenever compatible.
 
-When Stage 3 artifacts exist, connect `origin_image`, `prompts/slide_XX.json`, `slide_plan.md`, `reference_mapping.md`, `material_manifest.json`, approval records, and original client assets into each page request. If this cannot be done reliably, stop and report exactly which pages lack metadata or original assets.
+When Stage 3 artifacts exist, connect `origin_image`, `prompts/slide_XX.json`, `slide_plan.md`, `reference_mapping.md`, `material_manifest.json`, approval records, and original client assets into each page request:
+
+```bash
+python skills/ppt-editable-reconstruction/scripts/prepare_deck_run.py <image_based_pptx_or_images> --stage3-project <stage3_deck_dir>
+```
+
+If `--stage3-project` is omitted, each page request records metadata loss. If a normal native/complex PPTX is supplied, the normalizer uses image-based extraction when possible and otherwise renders pages through local LibreOffice when available; that fallback also records native-object metadata loss.
 
 ## Reference Map
 

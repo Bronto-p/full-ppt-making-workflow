@@ -1,8 +1,12 @@
 import hashlib
 import json
 import os
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
+
+import fcntl
 
 
 ACTIVE_PAGE_STATUSES = {"dispatched", "repair_dispatched"}
@@ -26,7 +30,35 @@ def read_json(path, default=None):
 def write_json(path, data):
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    body = json.dumps(data, ensure_ascii=False, indent=2) + "\n"
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(body)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+@contextmanager
+def locked_json(path, default=None):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_name(f".{path.name}.lock")
+    with lock_path.open("a+", encoding="utf-8") as lock_file:
+        fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        data = read_json(path, default=default)
+        try:
+            yield data
+        except Exception:
+            raise
+        else:
+            write_json(path, data)
+        finally:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
 
 
 def sha256_file(path):
@@ -70,12 +102,20 @@ def save_deck(run_dir, deck):
     write_json(deck_manifest_path(run_dir), deck)
 
 
+def locked_deck(run_dir):
+    return locked_json(deck_manifest_path(run_dir))
+
+
 def load_jobs(run_dir):
     return read_json(page_jobs_path(run_dir))
 
 
 def save_jobs(run_dir, jobs):
     write_json(page_jobs_path(run_dir), jobs)
+
+
+def locked_jobs(run_dir):
+    return locked_json(page_jobs_path(run_dir))
 
 
 def load_run_state(run_dir):
@@ -86,15 +126,18 @@ def save_run_state(run_dir, state):
     write_json(run_state_path(run_dir), state)
 
 
+def locked_run_state(run_dir):
+    return locked_json(run_state_path(run_dir), default={"status": "created", "history": []})
+
+
 def set_run_status(run_dir, status, note=None):
-    state = load_run_state(run_dir)
-    if state.get("status") != status:
-        state.setdefault("history", []).append(
-            {"from": state.get("status"), "to": status, "at": now_iso(), "note": note}
-        )
-    state["status"] = status
-    state["updated_at"] = now_iso()
-    save_run_state(run_dir, state)
+    with locked_run_state(run_dir) as state:
+        if state.get("status") != status:
+            state.setdefault("history", []).append(
+                {"from": state.get("status"), "to": status, "at": now_iso(), "note": note}
+            )
+        state["status"] = status
+        state["updated_at"] = now_iso()
     return state
 
 
@@ -174,6 +217,10 @@ def update_jobs_run_status(jobs):
         jobs["run_status"] = "pages_dispatched"
     if pages and all(page.get("status") in {"recorded", "accepted"} for page in pages):
         jobs["run_status"] = "pages_recorded"
+    if pages and any(page.get("status") == "validation_failed" for page in pages):
+        jobs["run_status"] = "validation_failed"
+    if pages and any(page.get("status") == "repair_needed" for page in pages):
+        jobs["run_status"] = "repair_needed"
     if pages and all(page.get("status") == "accepted" for page in pages):
         jobs["run_status"] = "complete"
     jobs["updated_at"] = now_iso()

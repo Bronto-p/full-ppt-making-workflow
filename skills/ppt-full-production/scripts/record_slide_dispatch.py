@@ -8,6 +8,7 @@ from pathlib import Path
 
 from slide_run_state import (
     deck_dir_from_target,
+    dispatch_slots_available,
     find_slide,
     locked_jobs,
     now_iso,
@@ -33,6 +34,12 @@ def main() -> int:
         slide = find_slide(jobs, args.slide)
         if slide.get("status") != "pending":
             raise SystemExit(f"{slide['slide_id']} must be pending before dispatch; got {slide.get('status')}")
+        slots = dispatch_slots_available(jobs)
+        if slots <= 0:
+            raise SystemExit(
+                "No slide dispatch slots available. "
+                f"max_concurrent_slides={jobs.get('max_concurrent_slides')}, active dispatches already at limit."
+            )
 
         prompt_ref = args.prompt_file or slide.get("job")
         if not prompt_ref:

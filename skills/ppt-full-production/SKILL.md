@@ -43,11 +43,13 @@ If any required input is missing, stop and report what is missing. Do not start 
 This skill includes `scripts/` wrappers for the production scripts from `codex-ppt`. Use these local script entrypoints for deterministic production state and assembly:
 
 - `codex_ppt_runtime.py`: bootstrap/check runtime.
+- `build_deck_spec.py`: conservatively build `deck_spec.json` from approved Markdown artifacts and stop on ambiguous text, blocked mappings, missing assets, or stale approvals.
 - `prepare_slide_prompts.py`: prepare per-slide prompt jobs when compatible with `deck_spec.json`.
 - `slide_job_status.py`: inspect pending, dispatched, blocked, and recorded slides.
 - `record_slide_dispatch.py`: record slide worker dispatch.
-- `record_slide_result.py`: copy selected generated slide images and record provenance.
+- `record_slide_result.py`: copy selected generated slide images and record backend id, aspect ratio, and provenance.
 - `record_slide_blocker.py`: record blockers.
+- `reset_slide_for_retry.py`: reset blocked/dispatched slides back to pending with retry history.
 - `slide_run_state.py`: manage slide run state.
 - `assemble_ppt.py`: assemble final image-based PPTX.
 
@@ -180,6 +182,12 @@ Create or update:
 - required client assets
 - selected image backend
 
+When the project only has the approved Markdown artifacts, use the converter first and treat any converter error as a production blocker:
+
+```bash
+python skills/ppt-full-production/scripts/build_deck_spec.py --project-root <order_folder> --slide-plan <order_folder>/slide_plan.md --approved-style-reference <order_folder>/approved_style_reference.md --reference-mapping <order_folder>/reference_mapping.md --approval-log <order_folder>/approval_log.json --out <deck_dir>/deck_spec.json
+```
+
 Every slide job must be self-contained. Do not rely on conversation context.
 
 ### 4. Per-Slide Job Contract
@@ -275,6 +283,8 @@ Assemble the PPTX with this skill's local assembly wrapper:
 ```bash
 python skills/ppt-full-production/scripts/assemble_ppt.py {base_dir} {deck_name}.pptx --aspect-ratio 16:9
 ```
+
+`assemble_ppt.py` accepts either the parent directory (`{base_dir}/{deck_name}`) or the deck project directory itself as its first argument. Before assembly, it validates exact `slide_id` to `origin_image/slide_XX` mappings and result provenance; extra or wrong-numbered formal slide images block assembly.
 
 Before assembly, ensure `slide_jobs.json` shows all generated slides as recorded and no slides as pending, dispatched, or blocked.
 

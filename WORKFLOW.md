@@ -32,6 +32,13 @@ Script entrypoint:
 python skills/ppt-order-planner/scripts/ingest_materials.py <order_folder>
 ```
 
+Validation helpers:
+
+```bash
+python skills/ppt-order-planner/scripts/lint_slide_plan.py <order_folder>/slide_plan.md
+python skills/ppt-order-planner/scripts/approval_log.py check --log <order_folder>/approval_log.json --stage plan --artifact slide_plan.md
+```
+
 Primary responsibility:
 
 - prove which files the agent can read as text
@@ -139,6 +146,12 @@ Before moving to Stage 3:
 - every mapped reference image must exist or be clearly blocked
 - approval must be recorded; if feedback changed text, layout, image policy, style, or mapping, ask the user again before production
 
+Validate `reference_mapping.md` before production:
+
+```bash
+python skills/ppt-sample-iteration/scripts/validate_reference_mapping.py <order_folder>/reference_mapping.md --slide-plan <order_folder>/slide_plan.md --approval-log <order_folder>/approval_log.json
+```
+
 A reference image can be reused by many slides. A client template can also provide different rendered reference images for different slides or page types.
 
 Stage 2 must not generate the full deck, final `origin_image/slide_XX.png` set, `deck_spec.json`, `speech.md`, or PPTX files.
@@ -176,6 +189,12 @@ Stage 3 should prefer structured contract files derived from approved Markdown a
 - per-slide `prompts/slide_XX.json`
 
 If the structured files cannot prove the approved text, reference images, required images, preservation rules, and open-question status for every slide, stop before generation.
+
+When only Markdown artifacts exist, build the structured contract with:
+
+```bash
+python skills/ppt-full-production/scripts/build_deck_spec.py --project-root <order_folder> --out <deck_dir>/deck_spec.json
+```
 
 Primary responsibility:
 
@@ -244,6 +263,12 @@ Important rule:
 When a slide contains client-required images, the page worker must receive both the full slide source image and the original client image assets. The source slide shows placement and treatment; the original asset preserves identity. By default, client images should be imagegen-preserved inside the reconstructed background/scene rather than pasted later as obvious overlays, unless the manifest records that a separate movable image layer is the better choice.
 
 Stage 4 must connect each page to the Stage 3 prompt job and original client assets. If only flattened slide images/PPT/PDF are available, report the loss of metadata and ask the user before reconstructing any page where required client assets cannot be identified.
+
+When Stage 3 artifacts are available, pass them explicitly:
+
+```bash
+python skills/ppt-editable-reconstruction/scripts/prepare_deck_run.py <image_based_pptx_or_images> --stage3-project <stage3_deck_dir>
+```
 
 Stage 4 includes its own `scripts/` directory with wrapper entrypoints for the `image-to-editable-ppt` reconstruction scripts. Use the local `skills/ppt-editable-reconstruction/scripts/` entrypoints for run/page state, page dispatch/result state, imagegen result recording, asset processing, validation, and final editable deck assembly.
 

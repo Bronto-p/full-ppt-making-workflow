@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 from pathlib import Path
 import re
 import sys
@@ -20,6 +21,7 @@ from slide_run_state import (
     rel_to_deck,
     save_jobs,
     set_run_status,
+    sha256_file,
 )
 
 
@@ -52,15 +54,25 @@ def _string_list(value: Any) -> List[str]:
     return [str(item).strip() for item in _as_list(value) if str(item).strip()]
 
 
-_MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)\s]+)(?:\s+\"[^\"]*\")?\)")
+_MARKDOWN_IMAGE_START_RE = re.compile(r"!\[([^\]]*)\]\(")
 
 
 def _parse_markdown_image(value: str) -> Optional[Dict[str, str]]:
-    match = _MARKDOWN_IMAGE_RE.search(value)
+    match = _MARKDOWN_IMAGE_START_RE.search(value)
     if not match:
         return None
+    start = match.end()
+    end = value.find(")", start)
+    if end < 0:
+        return None
+    raw_destination = value[start:end].strip()
+    if raw_destination.startswith("<") and ">" in raw_destination:
+        path = raw_destination[1:raw_destination.index(">")].strip()
+    else:
+        title_match = re.match(r"(.+?)\s+(['\"])[^'\"]*\2\s*$", raw_destination)
+        path = (title_match.group(1) if title_match else raw_destination).strip()
+    path = path.replace(r"\ ", " ")
     alt_text = match.group(1).strip()
-    path = match.group(2).strip()
     description = value[: match.start()].strip(" \t\n\r:-;")
     role_parts = [part for part in [description, alt_text] if part]
     return {
@@ -113,8 +125,12 @@ def _normalize_input_image(entry: Any, *, slide_number: int, image_index: int, b
             if parsed:
                 image["path"] = parsed["path"]
                 image.setdefault("role", parsed["role"])
+            elif not image.get("path") and image.get("attachment"):
+                image["path"] = image["attachment"]
         if isinstance(image.get("path"), str):
             image["path"] = _resolve_image_path(image["path"], base_dir=base_dir)
+        if isinstance(image.get("attachment"), str):
+            image["attachment"] = _resolve_image_path(image["attachment"], base_dir=base_dir)
         if not str(image.get("role") or "").strip():
             image["role"] = "reference image"
         return image
@@ -228,7 +244,15 @@ def _format_input_images(images: Iterable[Dict[str, Any]]) -> str:
     for idx, image in enumerate(images, start=1):
         path = str(image.get("path") or image.get("attachment") or "").strip()
         role = str(image.get("role") or "reference image").strip()
-        fidelity = str(image.get("fidelity") or image.get("constraints") or "").strip()
+        rules: List[str] = []
+        for key in ("fidelity", "preservation", "constraints"):
+            value = image.get(key)
+            if value in (None, "", [], {}):
+                continue
+            if isinstance(value, (list, dict)):
+                value = json.dumps(value, ensure_ascii=False)
+            rules.append(str(value).strip())
+        fidelity = "; ".join(rule for rule in rules if rule)
         if not path:
             _die(f"Input image {idx} is missing path or attachment.")
         if fidelity:
@@ -247,6 +271,29 @@ def _slide_number(slide: Dict[str, Any], fallback: int) -> int:
     if number <= 0:
         _die(f"Slide number must be positive: {number}")
     return number
+
+
+def _backend_id(value: str) -> str:
+    lowered = value.lower()
+    if "image_gen.py" in lowered or "scripts/image_gen" in lowered:
+        return "cli-api-fallback"
+    if "cli" in lowered or "api" in lowered or "fallback" in lowered:
+        return "cli-api-fallback"
+    if "built-in" in lowered or "builtin" in lowered or "image_generate" in lowered or lowered.strip() == "image_gen":
+        return "built-in-image-tool"
+    return "custom-image-backend"
+
+
+def _image_size(path: Path) -> Dict[str, int]:
+    try:
+        from PIL import Image
+        with Image.open(path) as image:
+            image.load()
+            return {"width": image.width, "height": image.height}
+    except ImportError:
+        _die("Pillow is required to verify accepted final images. Run codex_ppt_runtime.py bootstrap first.")
+    except Exception as exc:
+        _die(f"Cannot open accepted final image: {path} ({exc})")
 
 
 def _build_prompt(
@@ -485,6 +532,11 @@ def main() -> int:
     prompts_dir = out_dir / "prompts"
     prompts_dir.mkdir(parents=True, exist_ok=True)
     (out_dir / "origin_image").mkdir(parents=True, exist_ok=True)
+    deck_spec_target = out_dir / "deck_spec.json"
+    if deck_spec_target.resolve() != spec_path.resolve():
+        if deck_spec_target.exists() and not args.force:
+            _die(f"Deck project already has deck_spec.json: {deck_spec_target} (use --force to replace it)")
+        shutil.copy2(spec_path, deck_spec_target)
 
     global_style_reference = spec.get("approved_style_reference")
     if global_style_reference is not None and not isinstance(global_style_reference, dict):
@@ -506,6 +558,8 @@ def main() -> int:
         or _method_backend_label(sample_generation_method)
         or "built-in image tool"
     )
+    selected_backend_id = str(spec.get("selected_backend_id") or _backend_id(str(selected_backend)))
+    aspect_ratio = str(spec.get("aspect_ratio") or "16:9")
     slide_job_entries: List[Dict[str, Any]] = []
 
     for fallback, slide, number in numbered_slides:
@@ -540,6 +594,8 @@ def main() -> int:
             "input_images": images,
             "requires_context_images": bool(images),
             "expected_backend": selected_backend,
+            "expected_backend_id": selected_backend_id,
+            "aspect_ratio": aspect_ratio,
             "sample_generation_method": sample_generation_method,
             "generation_contract": {
                 "must_use_selected_image_backend": True,
@@ -561,7 +617,31 @@ def main() -> int:
         slide_id = f"slide_{number:02d}"
         final_image = out_dir / "origin_image" / f"{slide_id}.png"
         sample_approved = bool(slide.get("sample_approved") or slide.get("approved_sample"))
-        status = "accepted" if sample_approved and final_image.exists() else "pending"
+        accepts_existing = bool(
+            slide.get("accept_existing_final_image")
+            or slide.get("accepted_final_image")
+            or slide.get("accepted_sample_source")
+        )
+        if sample_approved and final_image.exists() and not accepts_existing:
+            _die(
+                f"{slide_id}: existing origin_image final can only be accepted when the spec declares "
+                "`accept_existing_final_image`, `accepted_final_image`, or `accepted_sample_source`. "
+                "This prevents sample drafts from being mistaken for final production images."
+            )
+        status = "accepted" if sample_approved and final_image.exists() and accepts_existing else "pending"
+        accepted_result = None
+        if status == "accepted":
+            accepted_result = {
+                "final_image": rel_to_deck(out_dir, final_image),
+                "final_image_sha256": sha256_file(final_image),
+                "final_image_size_px": _image_size(final_image),
+                "accepted_sample": True,
+                "accepted_sample_source": slide.get("accepted_sample_source") or slide.get("accepted_final_image"),
+                "backend_used": slide.get("accepted_backend") or selected_backend,
+                "backend_id": selected_backend_id,
+                "qa_note": slide.get("accepted_qa_note") or "Existing final image accepted by deck_spec provenance.",
+                "recorded_at": now_iso(),
+            }
         slide_job_entries.append(
             {
                 "slide_id": slide_id,
@@ -575,12 +655,7 @@ def main() -> int:
                 "requires_context_images": bool(images),
                 "status": status,
                 "dispatch": None,
-                "result": {
-                    "final_image": rel_to_deck(out_dir, final_image),
-                    "accepted_sample": True,
-                }
-                if status == "accepted"
-                else None,
+                "result": accepted_result,
                 "blocker": None,
             }
         )
@@ -588,7 +663,11 @@ def main() -> int:
     slide_jobs = {
         "run_status": "jobs_prepared",
         "deck_name": spec.get("deck_name"),
+        "deck_spec": "deck_spec.json",
+        "deck_spec_sha256": sha256_file(deck_spec_target if deck_spec_target.exists() else spec_path),
+        "aspect_ratio": aspect_ratio,
         "selected_backend": selected_backend,
+        "selected_backend_id": selected_backend_id,
         "sample_generation_method": sample_generation_method,
         "max_concurrent_slides": max_concurrent_slides,
         "slides": slide_job_entries,

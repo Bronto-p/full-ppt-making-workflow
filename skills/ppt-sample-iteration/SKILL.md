@@ -233,6 +233,14 @@ Rules:
 - If a client template supplies different page designs, map slides to the matching rendered template page image.
 - If no approved reference image exists for a slide, do not hand off to full production.
 
+Validate the mapping before Stage 3:
+
+```bash
+python skills/ppt-sample-iteration/scripts/validate_reference_mapping.py <order_folder>/reference_mapping.md --slide-plan <order_folder>/slide_plan.md --approval-log <order_folder>/approval_log.json
+```
+
+The validator blocks missing slide rows, blocked rows, missing local images, reference images placed under `origin_image/`, and stale approvals. Use `--write-normalized-json` when Stage 3 needs a machine-readable mapping summary.
+
 ### `slide_plan.md`
 
 Update this file when feedback changes the production plan.

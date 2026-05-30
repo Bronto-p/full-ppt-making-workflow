@@ -72,6 +72,13 @@ def get_slide_images(ppt_project_dir: str) -> List[str]:
     return [path for _number, path in image_files]
 
 
+def slide_id_from_image_path(path: str) -> str:
+    match = re.match(r"^slide_(\d+)\.", os.path.basename(path), re.IGNORECASE)
+    if not match:
+        raise ValueError(f"Not a formal slide image name: {path}")
+    return f"slide_{int(match.group(1)):02d}"
+
+
 def load_speaker_notes(ppt_project_dir: str) -> Dict[int, str]:
     """
     从 speech.md 读取每页演讲备注。
@@ -124,10 +131,36 @@ def validate_slide_jobs_ready(ppt_project_dir: str, image_files: List[str]) -> N
         jobs = json.load(handle)
     slides = jobs.get("slides", [])
     problems = []
+    actual_by_id = {slide_id_from_image_path(path): os.path.abspath(path) for path in image_files}
+    expected_ids = set()
     for slide in slides:
+        slide_id = slide.get("slide_id")
+        if not slide_id:
+            problems.append("slide_jobs.json contains a slide without slide_id")
+            continue
+        expected_ids.add(slide_id)
         status = slide.get("status")
         if status not in {"recorded", "accepted"}:
-            problems.append(f"{slide.get('slide_id')} status={status}")
+            problems.append(f"{slide_id} status={status}")
+            continue
+        out_ref = slide.get("out") or f"origin_image/{slide_id}.png"
+        expected_path = os.path.abspath(os.path.join(ppt_project_dir, out_ref))
+        actual_path = actual_by_id.get(slide_id)
+        if not actual_path:
+            problems.append(f"{slide_id} missing formal output image `{out_ref}`")
+        elif actual_path != expected_path:
+            problems.append(f"{slide_id} image path mismatch: expected {expected_path}, found {actual_path}")
+        result = slide.get("result") or {}
+        if not result:
+            problems.append(f"{slide_id} has no result provenance")
+        elif not result.get("qa_note"):
+            problems.append(f"{slide_id} result is missing qa_note")
+        final_image = result.get("final_image")
+        if final_image and os.path.abspath(os.path.join(ppt_project_dir, final_image)) != expected_path:
+            problems.append(f"{slide_id} result.final_image does not match slide out path")
+    extra_ids = sorted(set(actual_by_id) - expected_ids)
+    for slide_id in extra_ids:
+        problems.append(f"{slide_id} exists in origin_image but has no slide_jobs entry")
     if problems:
         raise SystemExit("错误：仍有幻灯片未完成或被阻塞，不能组装 PPT:\n" + "\n".join(problems))
     expected_count = len(slides)
@@ -135,6 +168,14 @@ def validate_slide_jobs_ready(ppt_project_dir: str, image_files: List[str]) -> N
         raise SystemExit(
             f"错误：slide_jobs.json 记录 {expected_count} 页，但 origin_image 中找到 {len(image_files)} 张正式幻灯片图片"
         )
+
+
+def resolve_project_dir(base_dir: str, output_filename: str) -> str:
+    base = os.path.abspath(base_dir)
+    ppt_name = os.path.splitext(os.path.basename(output_filename))[0]
+    if os.path.isdir(os.path.join(base, "origin_image")) or os.path.basename(base) == ppt_name:
+        return base
+    return os.path.join(base, ppt_name)
 
 
 def compress_image_if_needed(
@@ -358,6 +399,9 @@ def main():
   # 将 PPT 保存为 MyPresentation/MyPresentation.pptx
   python assemble_ppt.py /path/to/base/ MyPresentation.pptx
 
+  # 也可以直接传入 PPT 项目目录
+  python assemble_ppt.py /path/to/base/MyPresentation MyPresentation.pptx
+
   # 指定 4:3 宽高比
   python assemble_ppt.py /path/to/base/ MyPresentation.pptx --aspect-ratio 4:3
 
@@ -406,8 +450,8 @@ def main():
     # 获取 PPT 名称（不含扩展名）
     ppt_name = os.path.splitext(os.path.basename(output_filename))[0]
 
-    # 构建 PPT 项目目录
-    ppt_project_dir = os.path.join(args.base_dir, ppt_name)
+    # 构建 PPT 项目目录。兼容传入父目录或项目目录本身。
+    ppt_project_dir = resolve_project_dir(args.base_dir, output_filename)
     origin_image_dir = os.path.join(ppt_project_dir, "origin_image")
 
     if args.init:

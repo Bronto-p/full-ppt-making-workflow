@@ -21,7 +21,20 @@ Use `scripts/ingest_materials.py` before planning when the order has Office/PDF/
 python skills/ppt-order-planner/scripts/ingest_materials.py <order_folder>
 ```
 
-It creates `material_manifest.json`, `ingestion_notes.md`, extracted DOCX/PPTX/XLSX media where available, rendered PDF pages when PyMuPDF is installed, and a contact sheet for viewable derived visuals. This is a visibility check, not a replacement for reading the requirement document.
+It creates `material_manifest.json`, `ingestion_notes.md`, extracted DOCX/PPTX/XLSX media where available, rendered PDF and Office pages when local dependencies are available, linked/external Office asset findings, and a contact sheet for viewable source and derived visuals. This is a visibility check, not a replacement for reading the requirement document.
+
+Use `scripts/lint_slide_plan.py` before handoff when a plan has been drafted:
+
+```bash
+python skills/ppt-order-planner/scripts/lint_slide_plan.py <order_folder>/slide_plan.md
+```
+
+Use `scripts/approval_log.py` to record and verify approval checkpoints:
+
+```bash
+python skills/ppt-order-planner/scripts/approval_log.py add --log <order_folder>/approval_log.json --stage plan --approved-by "user-confirmed client approval" --artifact slide_plan.md --artifact order_materials.md
+python skills/ppt-order-planner/scripts/approval_log.py check --log <order_folder>/approval_log.json --stage plan --artifact slide_plan.md
+```
 
 Use this before `ppt-sample-iteration` when the user is handling a real client order with mixed materials.
 

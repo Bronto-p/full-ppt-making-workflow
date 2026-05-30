@@ -2,6 +2,7 @@
 import argparse
 import html
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -518,10 +519,8 @@ def render_preview(manifest, manifest_path, out_path):
     def open_preview_image(src):
         if src.suffix.lower() != ".svg":
             return Image.open(src).convert("RGBA")
-        convert = "/opt/homebrew/bin/magick"
-        if not Path(convert).exists():
-            convert = "/opt/homebrew/bin/convert"
-        if not Path(convert).exists():
+        convert = shutil.which("magick") or shutil.which("convert")
+        if not convert:
             print(f"Warning: cannot preview SVG without ImageMagick: {src}", file=sys.stderr)
             return None
         with tempfile.NamedTemporaryFile(suffix=".png") as handle:

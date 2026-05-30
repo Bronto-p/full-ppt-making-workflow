@@ -15,6 +15,7 @@ from PIL import Image
 
 IMG_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff"}
 PPT_EXTS = {".ppt", ".pptx"}
+EMU_PER_INCH = 914400
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 NS = {
     "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
@@ -158,6 +159,23 @@ def slide_size_from_pptx(zip_file):
     return int(size.attrib["cx"]), int(size.attrib["cy"])
 
 
+def emu_size_to_inches(size):
+    cx, cy = size
+    return {"width": round(cx / EMU_PER_INCH, 3), "height": round(cy / EMU_PER_INCH, 3)}
+
+
+def slide_size_from_image(image_path):
+    with Image.open(image_path) as image:
+        width, height = image.size
+    ratio = width / height if height else 16 / 9
+    if abs(ratio - (16 / 9)) < 0.04:
+        return {"width": 13.333, "height": 7.5}
+    if abs(ratio - (4 / 3)) < 0.04:
+        return {"width": 10.0, "height": 7.5}
+    slide_width = 10.0
+    return {"width": slide_width, "height": round(slide_width / ratio, 3)}
+
+
 def slide_relationships(zip_file, slide_part):
     rels_name = f"{posixpath.dirname(slide_part)}/_rels/{posixpath.basename(slide_part)}.rels"
     if rels_name not in zip_file.namelist():
@@ -211,7 +229,7 @@ def extract_image_based_pptx_pages(pptx_path, pages_dir):
             with Image.open(io.BytesIO(z.read(image_part))) as image:
                 image.convert("RGB").save(out)
             outputs.append(out)
-    return outputs
+    return outputs, emu_size_to_inches((slide_cx, slide_cy))
 
 
 def find_soffice():
@@ -256,7 +274,7 @@ def convert_ppt_to_pptx(input_path, out_dir):
     return pptxs[0]
 
 
-def page_record(job_dir, page_index, source, input_path, source_page):
+def page_record(job_dir, page_index, source, input_path, source_page, slide_size=None):
     page_dir = source.parent
     rel_page_dir = page_dir.relative_to(job_dir).as_posix()
     return {
@@ -267,6 +285,7 @@ def page_record(job_dir, page_index, source, input_path, source_page):
         "manifest": f"{rel_page_dir}/manifest.json",
         "validation": f"{rel_page_dir}/validation.json",
         "input": Path(input_path).name,
+        "slide": slide_size or slide_size_from_image(source),
         "agent_status": "pending",
     }
 
@@ -294,24 +313,39 @@ def normalize_inputs(inputs, out_root="output/image-to-editable-ppt", job_dir=No
     suffixes = {path.suffix.lower() for path in copied}
     pages = []
     notes = []
+    metadata_loss = []
     input_type = "images"
+    slide_size = None
 
     if len(copied) == 1 and copied[0].suffix.lower() == ".pdf":
         input_type = "pdf"
         sources = render_pdf_pages(copied[0], pages_dir, dpi)
-        pages = [page_record(job_dir, i, source, copied[0], i) for i, source in enumerate(sources, start=1)]
+        slide_size = slide_size_from_image(sources[0]) if sources else {"width": 13.333, "height": 7.5}
+        pages = [page_record(job_dir, i, source, copied[0], i, slide_size) for i, source in enumerate(sources, start=1)]
     elif len(copied) == 1 and copied[0].suffix.lower() in PPT_EXTS:
         if copied[0].suffix.lower() == ".pptx":
             input_type = "pptx"
             notes = collect_notes_from_pptx(copied[0], input_dir / "notes")
             try:
-                sources = extract_image_based_pptx_pages(copied[0], pages_dir)
+                sources, slide_size = extract_image_based_pptx_pages(copied[0], pages_dir)
             except ValueError as exc:
-                raise SystemExit(
-                    "Unsupported PPTX for the lightweight path: "
-                    f"{exc} This skill accepts image-based PPTX files through lightweight extraction. "
-                    "Convert native/complex PPTX slides to PDF or page images first."
-                ) from exc
+                soffice = find_soffice()
+                if not soffice:
+                    raise SystemExit(
+                        "Unsupported PPTX for the lightweight path: "
+                        f"{exc} This PPTX contains native/complex content. Install LibreOffice/soffice "
+                        "for local PDF rendering or convert it to PDF/page images first. Metadata from "
+                        "native objects will be lost in the rendered fallback."
+                    ) from exc
+                metadata_loss.append(
+                    "Input PPTX was not image-based; pages were rendered through local Office conversion, "
+                    "so native object metadata and exact original asset provenance may be unavailable."
+                )
+                input_type = "pptx-rendered"
+                with tempfile.TemporaryDirectory() as tmp:
+                    rendered_pdf = convert_office_to_pdf(copied[0], Path(tmp))
+                    sources = render_pdf_pages(rendered_pdf, pages_dir, dpi)
+                slide_size = slide_size_from_image(sources[0]) if sources else {"width": 13.333, "height": 7.5}
         else:
             input_type = "ppt"
             with tempfile.TemporaryDirectory() as tmp:
@@ -320,14 +354,19 @@ def normalize_inputs(inputs, out_root="output/image-to-editable-ppt", job_dir=No
                 notes = collect_notes_from_pptx(source_pptx, input_dir / "notes")
                 if source_pptx != copied[0]:
                     shutil.copy2(source_pptx, input_dir / source_pptx.name)
+                with zipfile.ZipFile(source_pptx) as z:
+                    slide_size = emu_size_to_inches(slide_size_from_pptx(z))
                 rendered_pdf = convert_office_to_pdf(copied[0], tmp_dir)
                 sources = render_pdf_pages(rendered_pdf, pages_dir, dpi)
-        pages = [page_record(job_dir, i, source, copied[0], i) for i, source in enumerate(sources, start=1)]
+        slide_size = slide_size or (slide_size_from_image(sources[0]) if sources else {"width": 13.333, "height": 7.5})
+        pages = [page_record(job_dir, i, source, copied[0], i, slide_size) for i, source in enumerate(sources, start=1)]
     elif suffixes <= IMG_EXTS:
         input_type = "image" if len(copied) == 1 else "images"
         for i, src in enumerate(copied, start=1):
             source = save_image_page(src, pages_dir / f"page_{i:03d}")
-            pages.append(page_record(job_dir, i, source, src, i))
+            page_slide_size = slide_size_from_image(source)
+            pages.append(page_record(job_dir, i, source, src, i, page_slide_size))
+        slide_size = pages[0]["slide"] if pages else {"width": 13.333, "height": 7.5}
     else:
         raise SystemExit(f"Unsupported input combination: {', '.join(str(path) for path in input_paths)}")
 
@@ -345,10 +384,12 @@ def normalize_inputs(inputs, out_root="output/image-to-editable-ppt", job_dir=No
         "job_dir": str(job_dir),
         "page_count": len(pages),
         "inputs": [path.relative_to(job_dir).as_posix() for path in copied],
+        "slide": slide_size or {"width": 13.333, "height": 7.5},
         "pages": pages,
         "notes_manifest": notes_manifest_path.relative_to(job_dir).as_posix(),
         "output": default_output_name(copied),
         "validation": "validation.json",
+        "metadata_loss": metadata_loss,
     }
     deck_manifest_path = job_dir / "deck_manifest.json"
     deck_manifest_path.write_text(json.dumps(deck_manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

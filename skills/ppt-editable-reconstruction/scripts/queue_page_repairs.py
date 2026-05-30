@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 
-from deck_run_state import find_page, load_jobs, now_iso, read_json, run_dir_from_target, save_jobs, write_json
+from deck_run_state import find_page, locked_jobs, now_iso, read_json, run_dir_from_target, set_run_status, update_jobs_run_status, write_json
 
 
 def next_repair_id(queue, page_id):
@@ -43,33 +43,35 @@ def main():
     args = parser.parse_args()
 
     run_dir = run_dir_from_target(args.run)
-    jobs = load_jobs(run_dir)
-    queue_path = run_dir / "repair_queue.json"
-    queue = read_json(queue_path, default={"schema_version": 1, "items": []})
-    targets = []
-    if args.page:
-        targets = [find_page(jobs, page) for page in args.page]
-    elif args.from_validation:
-        targets = [
-            page
-            for page in jobs.get("pages", [])
-            if page.get("status") == "recorded" and validation_failed(run_dir, page)
-        ]
-    else:
-        raise SystemExit("Use --page or --from-validation")
+    with locked_jobs(run_dir) as jobs:
+        queue_path = run_dir / "repair_queue.json"
+        queue = read_json(queue_path, default={"schema_version": 1, "items": []})
+        targets = []
+        if args.page:
+            targets = [find_page(jobs, page) for page in args.page]
+        elif args.from_validation:
+            targets = [
+                page
+                for page in jobs.get("pages", [])
+                if page.get("status") in {"recorded", "validation_failed"} and validation_failed(run_dir, page)
+            ]
+        else:
+            raise SystemExit("Use --page or --from-validation")
 
-    created = []
-    for page in targets:
-        if page.get("status") != "recorded":
-            raise SystemExit(f"{page['page_id']} must be recorded before repair queueing; got {page.get('status')}")
-        evidence = list(args.evidence)
-        if not evidence:
-            evidence.append(page.get("validation"))
-        created.append(add_item(queue, page, args.reason, evidence))
+        created = []
+        for page in targets:
+            if page.get("status") not in {"recorded", "validation_failed"}:
+                raise SystemExit(f"{page['page_id']} must be recorded or validation_failed before repair queueing; got {page.get('status')}")
+            evidence = list(args.evidence)
+            if not evidence:
+                evidence.append(page.get("validation"))
+            created.append(add_item(queue, page, args.reason, evidence))
 
-    queue["updated_at"] = now_iso()
-    write_json(queue_path, queue)
-    save_jobs(run_dir, jobs)
+        queue["updated_at"] = now_iso()
+        write_json(queue_path, queue)
+        update_jobs_run_status(jobs)
+    if created:
+        set_run_status(run_dir, "repair_needed", f"queued {len(created)} page repair(s)")
     print(f"queued={len(created)}")
 
 
