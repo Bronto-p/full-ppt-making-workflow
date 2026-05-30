@@ -44,17 +44,11 @@ Reuse the orchestration model from `image-to-editable-ppt`:
 - page workers output `manifest.json`, `page.pptx`, `preview.png`, `split_assets_contact.png`, `validation.json`, and `page_result.json`
 - final assembly combines accepted page PPTX files into one final editable deck
 
-Use `image-to-editable-ppt` scripts if available and compatible. Do not reimplement deterministic run/page state machinery by hand.
+Use this skill's local `scripts/` entrypoints whenever compatible. Do not reimplement deterministic run/page state machinery by hand.
 
-## Script Reuse
+## Scripts
 
-Reuse installed `image-to-editable-ppt` scripts from:
-
-```text
-/Users/yuruihe/.codex/skills/image-to-editable-ppt/scripts/
-```
-
-Use them for deterministic run/page state, page building, validation, and final assembly:
+This skill includes `scripts/` wrappers for the page reconstruction scripts from `image-to-editable-ppt`. Use these local script entrypoints for deterministic run/page state, page building, validation, and final assembly:
 
 - `image_to_editable_ppt_runtime.py`: bootstrap/check runtime.
 - `prepare_deck_run.py`: create run/page directories and normalize inputs when compatible.
@@ -69,7 +63,7 @@ Use them for deterministic run/page state, page building, validation, and final 
 - `validate_pptx.py`: validate page/final PPTX files.
 - `finalize_deck_run.py`: assemble accepted page PPTX files into final editable deck.
 
-Do not copy these scripts into this skill. Use the installed scripts whenever compatible.
+Use these local script entrypoints whenever compatible.
 
 If workflow-specific preparation becomes stable later, add a small wrapper to connect Stage 3 artifacts (`origin_image`, `prompts/slide_XX.json`, `slide_plan.md`, `reference_mapping.md`, and original client assets) to the page run structure expected by `image-to-editable-ppt`. Do not add that wrapper until tested on real orders.
 
@@ -82,14 +76,6 @@ Read these before dispatching or doing page reconstruction:
 - `references/background-and-client-images.md`: clean background and original client image preservation/fusion strategy.
 - `references/page-worker-contract.md`: worker prompt requirements and return contract.
 - `prompts/page-worker.md`: page worker handoff template.
-
-Also read the base skill references as needed:
-
-- `/Users/yuruihe/.codex/skills/image-to-editable-ppt/references/architecture.md`
-- `/Users/yuruihe/.codex/skills/image-to-editable-ppt/references/state-machine.md`
-- `/Users/yuruihe/.codex/skills/image-to-editable-ppt/references/manifest-schema.md`
-- `/Users/yuruihe/.codex/skills/image-to-editable-ppt/references/qa-rubric.md`
-- `/Users/yuruihe/.codex/skills/image-to-editable-ppt/references/script-contracts.md`
 
 Use `$imagegen` for all image generation, image editing, background generation, client-image-preserving fusion, transparent assets, and repairs. Read:
 
@@ -119,7 +105,7 @@ ${CODEX_HOME:-$HOME/.codex}/skills/.system/imagegen/SKILL.md
    - Build `page.pptx`, render `preview.png`, create contact sheet, validate, and repair local failures.
 
 4. Main agent records page results and queues repairs.
-   - Use base skill state scripts when available.
+   - Use local state scripts whenever compatible.
    - Do not hand-edit run state JSON.
    - Repair the smallest failing layer or asset.
 
