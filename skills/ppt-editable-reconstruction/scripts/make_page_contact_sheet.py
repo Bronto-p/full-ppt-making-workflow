@@ -1,5 +1,28 @@
 #!/usr/bin/env python3
-"""Delegate to the bundled base workflow script: /Users/yuruihe/.codex/skills/image-to-editable-ppt/scripts/make_page_contact_sheet.py"""
-import runpy
+import argparse
+from pathlib import Path
 
-runpy.run_path('/Users/yuruihe/.codex/skills/image-to-editable-ppt/scripts/make_page_contact_sheet.py', run_name="__main__")
+from _page_artifacts import write_pair
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Create an origin/preview contact sheet for a page.")
+    parser.add_argument("page_dir")
+    parser.add_argument("--source", default="source.png")
+    parser.add_argument("--preview", default="preview.png")
+    parser.add_argument("--out", default="split_assets_contact.png")
+    args = parser.parse_args()
+
+    page_dir = Path(args.page_dir).resolve()
+    source = page_dir / args.source
+    preview = page_dir / args.preview
+    out = page_dir / args.out
+    if not source.exists():
+        raise SystemExit(f"Missing source image: {source}")
+    if not preview.exists():
+        raise SystemExit(f"Missing preview image: {preview}")
+    write_pair(source, preview, out)
+
+
+if __name__ == "__main__":
+    main()
