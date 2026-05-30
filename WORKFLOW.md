@@ -243,6 +243,18 @@ Stage 4 page workers produce:
 - `validation.json`
 - `page_result.json`
 
+## Scripts, Assets, And References
+
+See `references/script-asset-reference-policy.md` for the shared policy.
+
+Summary:
+
+- Stage 1 and Stage 2 do not need dedicated scripts yet; their outputs are still human-reviewed planning and approval documents.
+- Stage 3 should reuse installed `codex-ppt` scripts for runtime checks, slide jobs, dispatch/result/blocker state, and PPTX assembly.
+- Stage 4 should reuse installed `image-to-editable-ppt` scripts for run/page state, page dispatch/result state, imagegen result recording, asset processing, validation, and final editable deck assembly.
+- Do not copy base-skill scripts into this repository unless a wrapper or fork becomes necessary.
+- Do not add generic assets yet. Client assets, generated samples, approved references, final slide images, and reconstruction assets belong in per-order project folders.
+
 ## Non-Negotiable Rules
 
 - Do not start Stage 2 before the full slide plan is approved.
