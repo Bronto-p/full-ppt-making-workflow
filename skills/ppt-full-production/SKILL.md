@@ -36,6 +36,29 @@ The order/project folder must contain:
 
 If any required input is missing, stop and report what is missing. Do not start production.
 
+## Script Reuse
+
+Reuse installed `codex-ppt` scripts from:
+
+```text
+/Users/yuruihe/.codex/skills/codex-ppt/scripts/
+```
+
+Use them for deterministic production state and assembly:
+
+- `codex_ppt_runtime.py`: bootstrap/check runtime.
+- `prepare_slide_prompts.py`: prepare per-slide prompt jobs when compatible with `deck_spec.json`.
+- `slide_job_status.py`: inspect pending, dispatched, blocked, and recorded slides.
+- `record_slide_dispatch.py`: record slide worker dispatch.
+- `record_slide_result.py`: copy selected generated slide images and record provenance.
+- `record_slide_blocker.py`: record blockers.
+- `slide_run_state.py`: manage slide run state.
+- `assemble_ppt.py`: assemble final image-based PPTX.
+
+Do not copy these scripts into this skill. Do not hand-edit slide state JSON when an installed script applies.
+
+If workflow-specific conversion becomes stable later, add a small wrapper to convert `slide_plan.md`, `approved_style_reference.md`, and `reference_mapping.md` into `deck_spec.json`. Do not add that wrapper until the document formats have been tested on real orders.
+
 ## Production Contract
 
 Before creating any prompt jobs or final slide images, validate:
