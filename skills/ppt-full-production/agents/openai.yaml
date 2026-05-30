@@ -1,0 +1,3 @@
+display_name: PPT Full Production
+short_description: Generate the final image-based PPT from an approved slide plan and reference mapping.
+default_prompt: Produce the final PPT from the approved slide_plan.md, approved_style_reference.md, and reference_mapping.md. Each slide worker must receive text content, actual reference image inputs, and required client image inputs when present. Generate final slide images, QA them, record state, and assemble the PPTX.
