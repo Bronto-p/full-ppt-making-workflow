@@ -1,20 +1,20 @@
 ---
 name: ppt-order-planner
-description: Turn a client PPT order folder into a production-ready plan. Use when the user has a customer requirement document plus PPT, Word/PDF/text, template, image, logo, or old-deck materials and wants to organize what each slide should contain before using codex-ppt or another PPT production skill.
+description: Turn a client PPT order folder into the first-stage production plan for an image-based PPT workflow. Use when the user has a customer requirement document plus PPT, Word/PDF/text, template, image, logo, or old-deck materials and wants to organize each slide's text, image assets, and initial template/style plan before sample-slide iteration.
 ---
 
 # PPT Order Planner
 
 ## Purpose
 
-This skill prepares a customer PPT order for production. It reads the client requirement document first, verifies the referenced materials in the order folder, then creates:
+This skill prepares a customer PPT order for the first stage of an image-based PPT workflow. It reads the client requirement document first, verifies the referenced materials in the order folder, then creates:
 
 - `order_materials.md`: what the client provided and how each material should be used.
-- `slide_plan.md`: the per-slide plan that locks text, template/style reference, and image assets.
+- `slide_plan.md`: the per-slide plan that locks text, image assets, and the initial template/style plan.
 
-Use this before `codex-ppt` when the user is handling a real client order with mixed materials.
+Use this before `ppt-sample-iteration` when the user is handling a real client order with mixed materials.
 
-Do not generate slides, sample images, `deck_spec.json`, or PPTX files in this skill.
+Do not generate slides, sample images, `deck_spec.json`, or PPTX files in this skill. This skill plans the job; sample images are handled by the second-stage sample iteration skill.
 
 ## Core Principle
 
@@ -129,12 +129,12 @@ Only include conclusions supported by the requirement document or by direct insp
 
 ### 4. Create `slide_plan.md`
 
-Create a per-slide production plan in the order folder. This is the main handoff artifact for later PPT generation.
+Create a per-slide production plan in the order folder. This is the main handoff artifact for sample iteration and later full PPT generation.
 
 Every slide should lock three things:
 
 1. Text content
-2. Template or style reference
+2. Initial template/style plan
 3. Image assets and image policy
 
 Use this format:
@@ -153,11 +153,15 @@ Use this format:
 - Must preserve:
   - ...
 
-### Template / Style Reference
-- File:
-- Reference page/image:
-- Usage:
-- Strictness:
+### Template / Style Plan
+- Source:
+- Current description:
+- Reference files:
+- Page type:
+- Sample required:
+- Sample strategy:
+- Approval status:
+- Approved reference:
 
 ### Images
 - Required:
@@ -175,20 +179,46 @@ Use this format:
 
 If the client has already specified every page, preserve that structure. If the client provided long-form content instead of page-by-page content, propose a practical slide breakdown and mark it for confirmation.
 
-If the client provided a template or style reference, map each slide to the relevant template page type when possible: cover, agenda, section divider, content page, image page, data page, closing page, or another visible page type.
+If the client provided a template or style reference, map each slide to the relevant template page type when possible: cover, agenda, section divider, content page, image page, data page, closing page, or another visible page type. Set `Approval status` to `not approved` because a sample still needs client confirmation.
+
+If the client did not provide a template or visual reference, still write a clear template/style plan from the requirement document and the deck purpose. Describe the intended visual direction in `Current description`, set `Source` to `client verbal requirement` or `agent-designed draft`, and set `Sample strategy` to `2-3 directions` or `2-3 page type samples`.
+
+If the client wants an old PPT beautified or redesigned, treat the old PPT primarily as content source unless the requirement document says its existing visual style should be kept. The initial template/style plan should describe the new direction to test through samples.
 
 If the client provided images, do not leave them as a general pool when their use can be planned. Assign them to slides where appropriate. If a required image placement is unclear, list it in `Open Questions`.
 
-### 5. Ask For Confirmation
+### 5. Recommend The Sample Strategy
+
+Add a deck-level section to `slide_plan.md`:
+
+```markdown
+## Sample Strategy
+- Reason samples are needed:
+- If client provided template/reference:
+- If no template/reference was provided:
+- Recommended sample count:
+- Recommended sample slides:
+- What the client must approve:
+```
+
+Use these defaults:
+
+- Clear client template/reference: plan one representative sample slide.
+- No template/reference, only verbal direction: plan 2-3 visual directions.
+- Old PPT beautification/redesign: plan 2-3 representative samples, such as cover, standard content, and complex image/data/process page.
+- Strongly varied deck page types: plan samples by page type rather than one generic slide.
+
+### 6. Ask For Confirmation
 
 After creating `order_materials.md` and `slide_plan.md`, report:
 
 - paths to both files
 - the planned slide count
+- the recommended sample strategy
 - which items still need clarification
 - that no slide images or PPT files were generated
 
-Ask the user to confirm or edit `slide_plan.md` before handing off to `codex-ppt` or another production skill.
+Ask the user to confirm or edit `slide_plan.md` before running `ppt-sample-iteration`.
 
 ## Hard Rules
 
@@ -202,17 +232,17 @@ Ask the user to confirm or edit `slide_plan.md` before handing off to `codex-ppt
 - If template usage is unclear, ask whether it is strict template use, style reference, loose direction, or not relevant.
 - If image usage is unclear, ask which images are required and where they should appear.
 - If text rewrite permission is unclear, ask whether content can be edited, summarized, or only visually arranged.
-- If editability is unclear, ask whether image-based PPT output is acceptable or object-level editability is required.
+- The planned final workflow is image-based slide generation. Still record any client editability requirement as a delivery risk or open question.
 - Do not generate sample slides, final slide images, `deck_spec.json`, `speech.md`, or PPTX files during this skill.
 
-## Handoff To Codex PPT
+## Handoff To Sample Iteration
 
-After the user confirms `slide_plan.md`, use `codex-ppt` for visual production when image-based PPT output is acceptable.
+After the user confirms `slide_plan.md`, use `ppt-sample-iteration` to generate or coordinate sample slides and collect client feedback.
 
 When handing off:
 
-- Convert `slide_plan.md` into the approved `outline.md` / `deck_spec.json` structure expected by `codex-ppt`.
-- Carry required images as strict input assets.
-- Carry template images or rendered PPT pages as style/template references.
-- Preserve text rewrite and editability constraints.
-- Keep unresolved questions out of production until answered.
+- Use `order_materials.md` and `slide_plan.md` as the source of truth.
+- Keep required images as strict input assets.
+- Use template files, rendered template pages, reference images, or draft style descriptions as sample references.
+- Preserve text rewrite constraints and image preservation rules.
+- Do not move to full production until sample images are approved and `approved_style_reference.md` exists.
