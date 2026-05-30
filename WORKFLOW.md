@@ -144,7 +144,7 @@ Important rule:
 
 A file path is traceability, not visual input. The parent agent must verify and prepare actual image inputs for workers whenever the runtime supports image handoff. If a worker cannot access, view, or attach a reference image or required client image to the selected image backend, it must return a blocker instead of inventing a replacement.
 
-Stage 3 follows the `codex-ppt` production model: one final generated image per slide, state-recorded slide jobs, QA, speaker notes, and PPTX assembly.
+Stage 3 includes its own `scripts/` directory with wrapper entrypoints for the `codex-ppt` production scripts. Use the local `skills/ppt-full-production/scripts/` entrypoints for runtime checks, slide jobs, dispatch/result/blocker state, and PPTX assembly.
 
 ## Stage 4: `ppt-editable-reconstruction`
 
@@ -180,6 +180,8 @@ Primary responsibility:
 Important rule:
 
 When a slide contains client-required images, the page worker must receive both the full slide source image and the original client image assets. The source slide shows placement and treatment; the original asset preserves identity. By default, client images should be imagegen-preserved inside the reconstructed background/scene rather than pasted later as obvious overlays, unless the manifest records that a separate movable image layer is the better choice.
+
+Stage 4 includes its own `scripts/` directory with wrapper entrypoints for the `image-to-editable-ppt` reconstruction scripts. Use the local `skills/ppt-editable-reconstruction/scripts/` entrypoints for run/page state, page dispatch/result state, imagegen result recording, asset processing, validation, and final editable deck assembly.
 
 Stage 4 is not required for every order. Use it when the client needs editability after the high-fidelity image-based PPT is complete.
 
@@ -245,15 +247,12 @@ Stage 4 page workers produce:
 
 ## Scripts, Assets, And References
 
-See `references/script-asset-reference-policy.md` for the shared policy.
+Not every skill needs all three directories.
 
-Summary:
-
-- Stage 1 and Stage 2 do not need dedicated scripts yet; their outputs are still human-reviewed planning and approval documents.
-- Stage 3 should reuse installed `codex-ppt` scripts for runtime checks, slide jobs, dispatch/result/blocker state, and PPTX assembly.
-- Stage 4 should reuse installed `image-to-editable-ppt` scripts for run/page state, page dispatch/result state, imagegen result recording, asset processing, validation, and final editable deck assembly.
-- Do not copy base-skill scripts into this repository unless a wrapper or fork becomes necessary.
-- Do not add generic assets yet. Client assets, generated samples, approved references, final slide images, and reconstruction assets belong in per-order project folders.
+- Stage 1 and Stage 2 are planning and approval skills. They do not need dedicated scripts or generic assets right now.
+- Stage 3 owns `scripts/`, `prompts/`, `references/`, and `requirements.txt` because it performs deterministic full-deck production and assembly.
+- Stage 4 owns `scripts/`, `prompts/`, `references/`, and `requirements.txt` because it performs deterministic page reconstruction, validation, and final assembly.
+- Generic `assets/` directories are not added at the skill level right now. Client assets, generated samples, approved references, final slide images, and reconstruction assets belong in each order's project folder.
 
 ## Non-Negotiable Rules
 
