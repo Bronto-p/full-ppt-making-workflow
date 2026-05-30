@@ -34,6 +34,12 @@ Primary responsibility:
 - create a draft reference-image mapping plan
 - define the sample strategy
 
+Sample planning rule:
+
+- plan 3 sample slides by default for every order
+- use 2 samples only when the deck is very short, page types are not varied, or the user explicitly chooses a smaller sample set
+- choose representative page types, normally cover/opening, standard content, and the most complex page type
+
 Approval gate:
 
 Before moving to Stage 2, the client or user must approve the full `slide_plan.md`, including:
@@ -73,6 +79,13 @@ Primary responsibility:
 - update `slide_plan.md` when feedback changes the plan
 - create the final approved style reference
 - create the final slide-to-reference mapping
+
+Sample rule:
+
+- generate 3 sample slides by default, regardless of whether the client provided a template, reference image, verbal style direction, old PPT, or redesign request
+- generate 2 samples only for short/simple decks or when the user explicitly chooses fewer samples
+- do not use a single sample slide as the normal path
+- samples should test the visual system across representative page types
 
 Approval gate:
 
@@ -233,6 +246,7 @@ Stage 4 page workers produce:
 ## Non-Negotiable Rules
 
 - Do not start Stage 2 before the full slide plan is approved.
+- Stage 2 normally produces 3 sample slides; do not use a single sample as the normal path.
 - Do not start Stage 3 before samples and reference mapping are approved.
 - Do not start full production if any slide lacks a reference image.
 - Do not treat a path string as a substitute for actual image input.
