@@ -1,15 +1,15 @@
 ---
 name: ppt-sample-iteration
-description: Run the sample-slide iteration stage for a client PPT order. Use after ppt-order-planner has created slide_plan.md and before full deck production, to plan 1-3 sample slides, generate or coordinate image-based samples, collect client feedback, update the style/template plan, and produce approved_style_reference.md.
+description: Run the sample-slide iteration stage for a client PPT order. Use after ppt-order-planner has created and the client has approved slide_plan.md, and before full deck production, to plan 1-3 sample slides, generate or coordinate image-based samples, collect client feedback, update the style/template plan, and produce approved_style_reference.md plus reference_mapping.md.
 ---
 
 # PPT Sample Iteration
 
 ## Purpose
 
-This skill handles the second stage of the client PPT workflow: sample slides and style approval.
+This skill handles the second stage of the client PPT workflow: sample slides, style approval, and final reference-image mapping.
 
-Use it after `ppt-order-planner` has created a first `slide_plan.md`. This skill turns the initial template/style plan into client-approved visual references before full PPT production.
+Use it after `ppt-order-planner` has created `slide_plan.md` and the user confirms the client has approved the plan. This skill turns the initial template/style plan into client-approved visual references before full PPT production.
 
 Final PPT production is out of scope. Do not generate the full deck, `deck_spec.json`, final `origin_image/slide_XX.png` set, `speech.md`, or PPTX files in this skill.
 
@@ -18,7 +18,7 @@ Final PPT production is out of scope. Do not generate the full deck, `deck_spec.
 The overall workflow is:
 
 1. `ppt-order-planner`: organize client requirements, materials, per-slide text, image assets, and initial template/style plan.
-2. `ppt-sample-iteration`: generate sample slides, handle feedback, and lock the approved template/style references.
+2. `ppt-sample-iteration`: generate sample slides, handle feedback, lock the approved template/style references, and map every slide to a reference image.
 3. Full production: use the approved plan and references to generate the full image-based PPT workflow.
 
 This skill only performs step 2.
@@ -33,12 +33,18 @@ The order folder should contain:
 
 If `slide_plan.md` is missing, stop and ask the user to run or provide the output from `ppt-order-planner` first.
 
+If the full slide plan has not been approved by the client or user, stop and ask for plan approval first. The approved plan must cover each slide's text, image usage, template/style plan, draft reference-image mapping, and sample strategy.
+
 If client feedback is provided, read it before planning the next sample round.
 
 ## Core Rules
 
 - Samples are used to confirm the visual system before full deck production.
 - Whether the client provided a template or not, sample approval is still required before full production.
+- Full production cannot start unless every slide maps to at least one approved reference image.
+- A reference image can be reused across many slides.
+- A reference image may come from an approved generated sample, a rendered client template page, a client-provided style/reference image, or another client-approved visual reference.
+- Text-only style descriptions are not enough for full production.
 - Use image-based slide sample generation consistent with the final production approach.
 - Do not treat a verbal style direction as approved until the client has approved sample images.
 - Do not proceed to full deck generation during this skill.
@@ -53,6 +59,7 @@ If the client provided a clear template, reference image, or template PPT:
 - Default to one representative sample slide.
 - Prefer a real content slide over a cover unless the cover is the main buying decision.
 - Use the provided template/reference as visual guidance.
+- If the template has multiple page types or the client expects different template pages for different slides, create or verify a reference image for each required page type or per-slide template page.
 
 If the client did not provide a template or only gave a verbal direction:
 
@@ -174,6 +181,44 @@ Required structure:
 - Text rewrite constraints:
 ```
 
+### `reference_mapping.md`
+
+Create this after the sample/reference direction is approved. This file is mandatory for full production.
+
+It answers: which approved reference image should each slide use?
+
+Required structure:
+
+```markdown
+# Reference Mapping
+
+## Reference Images
+
+| Reference ID | File | Source | Usage |
+|---|---|---|---|
+| cover_ref | samples/approved/cover_reference.png | approved generated sample | cover pages |
+| content_ref | samples/approved/content_reference.png | approved generated sample | standard content pages |
+| template_03 | template_renders/page_03.png | client template page | data pages |
+
+## Slide To Reference Mapping
+
+| Slide | Page Type | Reference ID | Reference Image | Notes |
+|---:|---|---|---|---|
+| 1 | cover | cover_ref | samples/approved/cover_reference.png | Match title treatment and hero composition |
+| 2 | content | content_ref | samples/approved/content_reference.png | Reuse content page style |
+| 3 | data | template_03 | template_renders/page_03.png | Use chart/card layout language |
+```
+
+Rules:
+
+- Every slide in `slide_plan.md` must have a row.
+- Every row must point to at least one image file.
+- The image path must exist or be explicitly marked as blocked.
+- One reference image can be reused by many slides.
+- If a slide uses multiple reference images, state each image's role, such as `layout reference`, `style reference`, or `client template page`.
+- If a client template supplies different page designs, map slides to the matching rendered template page image.
+- If no approved reference image exists for a slide, do not hand off to full production.
+
 ### `slide_plan.md`
 
 Update this file when feedback changes the production plan.
@@ -192,7 +237,7 @@ Each slide should eventually point to an approved style or sample reference:
 - Approved reference:
 ```
 
-Before full production, `Approval status` should be approved for the deck-level style, or unresolved items should be listed clearly.
+Before full production, `Approval status` should be approved for the deck-level style and every slide's approved reference should be represented in `reference_mapping.md`.
 
 ## Sample Image Handling
 
@@ -226,8 +271,11 @@ For each round:
 4. Update `slide_plan.md` if the production plan changed.
 5. If another sample round is needed, update `sample_plan.md`.
 6. Once approved, create or update `approved_style_reference.md`.
+7. Create or update `reference_mapping.md` so every slide maps to an approved reference image.
 
 Do not call the style approved from your own judgment. Approval must come from the user or client feedback provided by the user.
+
+Do not call the reference mapping approved from your own judgment if the mapping changes the client's plan. If the mapping follows the already approved plan and sample feedback, record it; otherwise ask for confirmation.
 
 ## What To Report
 
@@ -244,6 +292,7 @@ After feedback, report:
 - what changed in the plan
 - whether another sample round is needed
 - whether `approved_style_reference.md` was created
+- whether `reference_mapping.md` now maps every slide to a reference image
 - that full deck production has not started
 
 ## Handoff To Full Production
@@ -252,7 +301,8 @@ After sample approval, full production should use:
 
 - confirmed `slide_plan.md`
 - `approved_style_reference.md`
+- `reference_mapping.md`
 - approved sample images under `samples/approved/`
 - required client assets exactly as planned
 
-The production stage should follow the image-based slide generation approach inspired by `codex-ppt`: one generated image per slide, with approved samples used as style/template references.
+The production stage should follow the image-based slide generation approach inspired by `codex-ppt`: one generated image per slide, with each slide using the reference image assigned in `reference_mapping.md`.
