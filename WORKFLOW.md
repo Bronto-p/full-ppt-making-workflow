@@ -1,12 +1,13 @@
 # Full PPT Making Workflow
 
-This repository defines a three-stage workflow for making client PPT decks with image-based slide generation.
+This repository defines a four-stage workflow for making client PPT decks with image-based slide generation and optional editable reconstruction.
 
 The core idea is simple:
 
 1. Plan the client's PPT order before design work starts.
 2. Confirm sample slides and reference images before full production.
-3. Produce the final deck with one generated image per slide, using the approved plan and approved references.
+3. Produce the final image-based deck with one generated image per slide.
+4. When needed, reconstruct the image-based deck into a more editable layered PPTX.
 
 ## Stage 1: `ppt-order-planner`
 
@@ -108,7 +109,7 @@ Outputs:
 - `slide_run_state.json`
 - `origin_image/slide_XX.png`
 - `speech.md`
-- final `.pptx`
+- final image-based `.pptx`
 
 Primary responsibility:
 
@@ -118,7 +119,7 @@ Primary responsibility:
 - ensure each worker receives the required payload
 - record dispatches, blockers, and results
 - QA every generated slide image
-- assemble the final PPTX
+- assemble the final image-based PPTX
 
 Every slide worker must receive:
 
@@ -131,6 +132,43 @@ Important rule:
 A file path is traceability, not visual input. The parent agent must verify and prepare actual image inputs for workers whenever the runtime supports image handoff. If a worker cannot access, view, or attach a reference image or required client image to the selected image backend, it must return a blocker instead of inventing a replacement.
 
 Stage 3 follows the `codex-ppt` production model: one final generated image per slide, state-recorded slide jobs, QA, speaker notes, and PPTX assembly.
+
+## Stage 4: `ppt-editable-reconstruction`
+
+Use this skill when the client wants a more editable PPTX after the image-based deck is produced.
+
+Inputs:
+
+- full Stage 3 project folder, ideally including:
+  - `origin_image/slide_XX.png`
+  - `slide_plan.md`
+  - `approved_style_reference.md`
+  - `reference_mapping.md`
+  - `prompts/slide_XX.json`
+  - original required client image assets
+  - final image-based `.pptx`
+
+Outputs:
+
+- page-level manifests and editable page PPTX files
+- page previews and validation files
+- final editable `.pptx`
+- final validation report
+
+Primary responsibility:
+
+- convert each image-based slide into a more editable layered PowerPoint page
+- use prior production metadata instead of guessing from the flattened screenshot only
+- preserve main slide text as native editable text boxes where practical
+- use `$imagegen` for clean/generated backgrounds, client-image-preserving background fusion, visual assets, and repairs
+- preserve client-required images from their original asset files, not from the flattened slide alone
+- assemble the final editable deck
+
+Important rule:
+
+When a slide contains client-required images, the page worker must receive both the full slide source image and the original client image assets. The source slide shows placement and treatment; the original asset preserves identity. By default, client images should be imagegen-preserved inside the reconstructed background/scene rather than pasted later as obvious overlays, unless the manifest records that a separate movable image layer is the better choice.
+
+Stage 4 is not required for every order. Use it when the client needs editability after the high-fidelity image-based PPT is complete.
 
 ## Cross-Stage Contract Files
 
@@ -178,6 +216,20 @@ Defines the self-contained production job for one slide:
 - layout intent
 - constraints
 
+### Page reconstruction outputs
+
+Stage 4 page workers produce:
+
+- `manifest.json`
+- `imagegen-jobs.json`
+- `clean_background.png` when applicable
+- `assets/`
+- `page.pptx`
+- `preview.png`
+- `split_assets_contact.png`
+- `validation.json`
+- `page_result.json`
+
 ## Non-Negotiable Rules
 
 - Do not start Stage 2 before the full slide plan is approved.
@@ -185,6 +237,8 @@ Defines the self-contained production job for one slide:
 - Do not start full production if any slide lacks a reference image.
 - Do not treat a path string as a substitute for actual image input.
 - Do not let workers invent missing required client images.
-- Do not create final slides with local drawing, HTML/SVG/canvas screenshots, Pillow, python-pptx/PptxGenJS, or manual overlays.
-- Every final slide image must be produced by the selected image generation backend.
-- Do not call a deck complete if any slide is blocked, missing, or unrecorded.
+- Do not create final image-based slides with local drawing, HTML/SVG/canvas screenshots, Pillow, python-pptx/PptxGenJS, or manual overlays.
+- Every Stage 3 final slide image must be produced by the selected image generation backend.
+- Do not use the flattened full-slide screenshot as the final editable background in Stage 4.
+- Stage 4 client-required image regions must be reconstructed with the original client asset as input whenever they are regenerated or fused into the background.
+- Do not call a deck complete if any slide/page is blocked, missing, or unrecorded.
