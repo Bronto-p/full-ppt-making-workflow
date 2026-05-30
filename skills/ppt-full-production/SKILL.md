@@ -36,15 +36,9 @@ The order/project folder must contain:
 
 If any required input is missing, stop and report what is missing. Do not start production.
 
-## Script Reuse
+## Scripts
 
-Reuse installed `codex-ppt` scripts from:
-
-```text
-/Users/yuruihe/.codex/skills/codex-ppt/scripts/
-```
-
-Use them for deterministic production state and assembly:
+This skill includes `scripts/` wrappers for the production scripts from `codex-ppt`. Use these local script entrypoints for deterministic production state and assembly:
 
 - `codex_ppt_runtime.py`: bootstrap/check runtime.
 - `prepare_slide_prompts.py`: prepare per-slide prompt jobs when compatible with `deck_spec.json`.
@@ -55,7 +49,7 @@ Use them for deterministic production state and assembly:
 - `slide_run_state.py`: manage slide run state.
 - `assemble_ppt.py`: assemble final image-based PPTX.
 
-Do not copy these scripts into this skill. Do not hand-edit slide state JSON when an installed script applies.
+Do not hand-edit slide state JSON when a local script entrypoint applies.
 
 If workflow-specific conversion becomes stable later, add a small wrapper to convert `slide_plan.md`, `approved_style_reference.md`, and `reference_mapping.md` into `deck_spec.json`. Do not add that wrapper until the document formats have been tested on real orders.
 
@@ -183,47 +177,7 @@ Every slide job must be self-contained. Do not rely on conversation context.
 
 ### 4. Per-Slide Job Contract
 
-Each `prompts/slide_XX.json` must include:
-
-```json
-{
-  "slide": 3,
-  "title": "Slide title",
-  "text_content": {
-    "source": "client-approved slide_plan.md",
-    "rewrite_allowed": false,
-    "title": "Slide title",
-    "body": ["point 1", "point 2"],
-    "must_preserve": ["numbers, names, required phrases"]
-  },
-  "reference_images": [
-    {
-      "path": "/absolute/path/samples/approved/content_reference.png",
-      "role": "approved style/layout reference",
-      "usage": "match style, layout density, typography, spacing, color, and visual language; do not copy unrelated content"
-    }
-  ],
-  "required_images": [
-    {
-      "path": "/absolute/path/assets/product_screenshot.png",
-      "role": "main product screenshot",
-      "preservation": "preserve original UI content exactly; do not redraw, replace, or approximate"
-    }
-  ],
-  "optional_images": [],
-  "layout_intent": {
-    "page_type": "standard content",
-    "goal": "explain the approved slide content with clear visual hierarchy"
-  },
-  "constraints": [
-    "Generate one complete 16:9 PPT slide image.",
-    "Render all approved slide text clearly and accurately.",
-    "Use the mapped reference image as visual reference.",
-    "Preserve required client images exactly.",
-    "No watermark, no unrelated logo, no slide number unless requested."
-  ]
-}
-```
+Each `prompts/slide_XX.json` must include `text_content`, `reference_images`, and `required_images` when the slide has required client assets.
 
 The three mandatory payload groups for every worker are:
 
@@ -281,13 +235,7 @@ After a worker returns:
 - Record the result with `record_slide_result.py`.
 - If a worker reports image access failure, backend failure, or required asset failure, record a blocker with `record_slide_blocker.py`.
 
-Final images must be copied into:
-
-```text
-origin_image/slide_01.png
-origin_image/slide_02.png
-...
-```
+Final images must be copied into `origin_image/slide_XX.png`.
 
 Do not hand-edit slide status files.
 
@@ -309,18 +257,12 @@ Regenerate severe failures. Use backend editing for localized fixes when availab
 
 ### 8. Speaker Notes And Assembly
 
-Create `speech.md` when notes are expected or useful. Use headings that map to slide numbers:
+Create `speech.md` when notes are expected or useful. Use headings that map to slide numbers.
 
-```markdown
-## Slide 1: {Title}
-
-Speaker notes...
-```
-
-Assemble the PPTX with `codex-ppt`'s assembly script:
+Assemble the PPTX with this skill's local assembly wrapper:
 
 ```bash
-~/.codex-ppt-skill/.venv/bin/python {codex_ppt_skill_root}/scripts/assemble_ppt.py {base_dir} {deck_name}.pptx --aspect-ratio 16:9
+python skills/ppt-full-production/scripts/assemble_ppt.py {base_dir} {deck_name}.pptx --aspect-ratio 16:9
 ```
 
 Before assembly, ensure `slide_jobs.json` shows all generated slides as recorded and no slides as pending, dispatched, or blocked.
