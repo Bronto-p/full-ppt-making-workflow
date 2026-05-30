@@ -1,0 +1,3 @@
+display_name: PPT Sample Iteration
+short_description: Generate and revise sample-slide plans until the client approves the PPT style.
+default_prompt: Use the existing slide_plan.md to plan sample slides, incorporate any client feedback, update the plan, and create approved_style_reference.md only after approval. Do not generate the full deck.
