@@ -10,11 +10,11 @@ description: Turn a client PPT order folder into the first-stage production plan
 This skill prepares a customer PPT order for the first stage of an image-based PPT workflow. It reads the client requirement document first, verifies the referenced materials in the order folder, then creates:
 
 - `order_materials.md`: what the client provided and how each material should be used.
-- `slide_plan.md`: the per-slide plan that locks text, image assets, and the initial template/style plan.
+- `slide_plan.md`: the per-slide plan that locks text, image assets, initial template/style plan, and draft reference-image mapping.
 
 Use this before `ppt-sample-iteration` when the user is handling a real client order with mixed materials.
 
-Do not generate slides, sample images, `deck_spec.json`, or PPTX files in this skill. This skill plans the job; sample images are handled by the second-stage sample iteration skill.
+Do not generate slides, sample images, `deck_spec.json`, or PPTX files in this skill. This skill plans the job and prepares the plan for client approval; sample images and final reference mapping are handled by the second-stage sample iteration skill.
 
 ## Core Principle
 
@@ -131,11 +131,12 @@ Only include conclusions supported by the requirement document or by direct insp
 
 Create a per-slide production plan in the order folder. This is the main handoff artifact for sample iteration and later full PPT generation.
 
-Every slide should lock three things:
+Every slide should lock four things:
 
 1. Text content
 2. Initial template/style plan
 3. Image assets and image policy
+4. Draft reference-image plan
 
 Use this format:
 
@@ -160,6 +161,8 @@ Use this format:
 - Page type:
 - Sample required:
 - Sample strategy:
+- Draft reference image:
+- Reference mapping status:
 - Approval status:
 - Approved reference:
 
@@ -187,7 +190,30 @@ If the client wants an old PPT beautified or redesigned, treat the old PPT prima
 
 If the client provided images, do not leave them as a general pool when their use can be planned. Assign them to slides where appropriate. If a required image placement is unclear, list it in `Open Questions`.
 
-### 5. Recommend The Sample Strategy
+### 5. Add Draft Reference Mapping Plan
+
+Add a deck-level section to `slide_plan.md`:
+
+```markdown
+## Draft Reference Mapping Plan
+
+| Slide | Page Type | Planned Reference Source | Planned Reference Image | Status | Notes |
+|---:|---|---|---|---|---|
+| 1 | cover | client template page | template_renders/page_01.png | needs client approval | Use as cover reference |
+| 2 | content | pending generated sample | samples/approved/content_reference.png | pending sample | Reuse for standard content pages |
+```
+
+This section is a plan, not final approval. It must make every slide's intended visual reference explicit before sample iteration.
+
+Rules:
+
+- A reference image can be reused by many slides.
+- If the client provided a template PPT or reference image, use rendered/visible template pages or reference images as planned reference images when available.
+- If the client did not provide a template, mark the planned reference image as pending sample output, such as `samples/approved/content_reference.png`.
+- If the client has a different template page for each slide, preserve that one-slide-to-one-reference mapping.
+- If a slide has no clear planned reference source, list it in `Open Questions`.
+
+### 6. Recommend The Sample Strategy
 
 Add a deck-level section to `slide_plan.md`:
 
@@ -208,17 +234,26 @@ Use these defaults:
 - Old PPT beautification/redesign: plan 2-3 representative samples, such as cover, standard content, and complex image/data/process page.
 - Strongly varied deck page types: plan samples by page type rather than one generic slide.
 
-### 6. Ask For Confirmation
+### 7. Ask For Client Plan Confirmation
 
 After creating `order_materials.md` and `slide_plan.md`, report:
 
 - paths to both files
 - the planned slide count
 - the recommended sample strategy
+- the draft reference mapping approach
 - which items still need clarification
 - that no slide images or PPT files were generated
 
-Ask the user to confirm or edit `slide_plan.md` before running `ppt-sample-iteration`.
+Ask the user to confirm or edit the full `slide_plan.md` before running `ppt-sample-iteration`. The confirmation must cover:
+
+- every slide's text content
+- every slide's image usage and required assets
+- every slide's template/style plan
+- every slide's draft reference-image mapping
+- the sample strategy
+
+If the user says the client has not approved the plan yet, stop after reporting the files and questions. Do not begin sample iteration until the plan is approved or the user explicitly authorizes internal sample drafts.
 
 ## Hard Rules
 
@@ -233,6 +268,7 @@ Ask the user to confirm or edit `slide_plan.md` before running `ppt-sample-itera
 - If image usage is unclear, ask which images are required and where they should appear.
 - If text rewrite permission is unclear, ask whether content can be edited, summarized, or only visually arranged.
 - The planned final workflow is image-based slide generation. Still record any client editability requirement as a delivery risk or open question.
+- The full plan must be approved before sample iteration: slide text, image usage, template/style plan, draft reference-image mapping, and sample strategy.
 - Do not generate sample slides, final slide images, `deck_spec.json`, `speech.md`, or PPTX files during this skill.
 
 ## Handoff To Sample Iteration
@@ -245,4 +281,4 @@ When handing off:
 - Keep required images as strict input assets.
 - Use template files, rendered template pages, reference images, or draft style descriptions as sample references.
 - Preserve text rewrite constraints and image preservation rules.
-- Do not move to full production until sample images are approved and `approved_style_reference.md` exists.
+- Do not move to full production until sample images are approved, `approved_style_reference.md` exists, and `reference_mapping.md` maps every slide to an approved reference image.
