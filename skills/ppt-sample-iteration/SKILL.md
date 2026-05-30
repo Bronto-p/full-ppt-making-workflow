@@ -1,6 +1,6 @@
 ---
 name: ppt-sample-iteration
-description: Run the sample-slide iteration stage for a client PPT order. Use after ppt-order-planner has created and the client has approved slide_plan.md, and before full deck production, to plan 1-3 sample slides, generate or coordinate image-based samples, collect client feedback, update the style/template plan, and produce approved_style_reference.md plus reference_mapping.md.
+description: Run the sample-slide iteration stage for a client PPT order. Use after ppt-order-planner has created and the client has approved slide_plan.md, and before full deck production, to plan 3 sample slides by default (2 only for short/simple decks or explicit user choice), generate or coordinate image-based samples, collect client feedback, update the style/template plan, and produce approved_style_reference.md plus reference_mapping.md.
 ---
 
 # PPT Sample Iteration
@@ -52,24 +52,31 @@ If client feedback is provided, read it before planning the next sample round.
 
 ## Sample Strategy
 
-Choose the smallest useful sample set.
+Generate a representative sample set for every order.
+
+Default rule:
+
+- Generate 3 sample slides by default.
+- Generate 2 sample slides only when the deck is very short, page types are not varied, or the user explicitly chooses a smaller sample set.
+- Do not use a single sample slide as the normal path.
+- Choose samples that test the visual system across page types.
 
 If the client provided a clear template, reference image, or template PPT:
 
-- Default to one representative sample slide.
-- Prefer a real content slide over a cover unless the cover is the main buying decision.
+- Still generate 3 samples by default.
+- Prefer representative page types: cover/opening, standard content, and the most complex page type.
 - Use the provided template/reference as visual guidance.
 - If the template has multiple page types or the client expects different template pages for different slides, create or verify a reference image for each required page type or per-slide template page.
 
 If the client did not provide a template or only gave a verbal direction:
 
-- Default to 2-3 visual directions.
-- Each direction may use the same representative slide so the client can compare style clearly.
-- If the deck has very different page types, use 2-3 sample pages instead: cover, standard content, and image/data page.
+- Generate 3 samples by default to establish the visual system.
+- The samples can be 3 representative page types in one coherent direction, or 3 visual directions applied to the same representative slide if the user explicitly wants style exploration.
+- Prefer 3 representative page types once a direction is chosen: cover/opening, standard content, and image/data/complex page.
 
 If the client wants an old PPT beautified or redesigned:
 
-- Select 2-3 representative pages from the old PPT: cover, normal content page, and a complex image/data/process page when available.
+- Select 3 representative pages from the old PPT by default: cover/opening, normal content page, and a complex image/data/process page when available.
 - Preserve the original slide text unless the plan allows rewriting.
 - Treat the old PPT as content source, not automatically as the new template.
 
