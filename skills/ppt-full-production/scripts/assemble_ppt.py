@@ -7,6 +7,7 @@ PPT 组装脚本
 """
 
 import argparse
+import json
 import os
 import re
 import sys
@@ -62,13 +63,13 @@ def get_slide_images(ppt_project_dir: str) -> List[str]:
         file_path = os.path.join(origin_image_dir, file)
         if os.path.isfile(file_path):
             ext = os.path.splitext(file)[1].lower()
-            if ext in image_extensions and slide_name_pattern.match(file):
-                image_files.append(file_path)
+            match = slide_name_pattern.match(file)
+            if ext in image_extensions and match:
+                image_files.append((int(match.group(1)), file_path))
 
-    # 按文件名排序
-    image_files.sort()
+    image_files.sort(key=lambda item: item[0])
 
-    return image_files
+    return [path for _number, path in image_files]
 
 
 def load_speaker_notes(ppt_project_dir: str) -> Dict[int, str]:
@@ -112,6 +113,28 @@ def load_speaker_notes(ppt_project_dir: str) -> Dict[int, str]:
 
     flush_current()
     return notes
+
+
+def validate_slide_jobs_ready(ppt_project_dir: str, image_files: List[str]) -> None:
+    jobs_path = os.path.join(ppt_project_dir, "slide_jobs.json")
+    if not os.path.exists(jobs_path):
+        print(f"警告：未找到 slide_jobs.json，无法校验任务状态: {jobs_path}")
+        return
+    with open(jobs_path, "r", encoding="utf-8") as handle:
+        jobs = json.load(handle)
+    slides = jobs.get("slides", [])
+    problems = []
+    for slide in slides:
+        status = slide.get("status")
+        if status not in {"recorded", "accepted"}:
+            problems.append(f"{slide.get('slide_id')} status={status}")
+    if problems:
+        raise SystemExit("错误：仍有幻灯片未完成或被阻塞，不能组装 PPT:\n" + "\n".join(problems))
+    expected_count = len(slides)
+    if expected_count and expected_count != len(image_files):
+        raise SystemExit(
+            f"错误：slide_jobs.json 记录 {expected_count} 页，但 origin_image 中找到 {len(image_files)} 张正式幻灯片图片"
+        )
 
 
 def compress_image_if_needed(
@@ -208,6 +231,7 @@ def create_presentation(
     output_path: str,
     aspect_ratio: str = "16:9",
     speaker_notes: Optional[Dict[int, str]] = None,
+    compress_images: bool = False,
 ) -> bool:
     """
     创建 PowerPoint 演示文稿
@@ -253,10 +277,8 @@ def create_presentation(
                 print(f"警告：图片文件不存在: {image_path}")
                 continue
 
-            # 压缩图片（如果需要）
-            compressed_path = compress_image_if_needed(image_path, max_size_mb=2.0)
+            compressed_path = compress_image_if_needed(image_path, max_size_mb=2.0) if compress_images else None
 
-            # 使用压缩后的图片或原图
             image_to_use = compressed_path if compressed_path else image_path
 
             # 记录临时文件以便后续清理
@@ -354,7 +376,7 @@ def main():
 注意：
   - 图片文件必须放在 origin_image 子目录中
   - 只会读取 slide_01.png、slide_02.png 这类正式图片，其他图片会被忽略
-  - 图片文件按文件名排序
+  - 图片文件按 slide_数字 的页码数值排序
   - 建议图片文件命名为: slide_01.png, slide_02.png, ...
   - 每张图片会充满整个幻灯片页面
   - 如果项目目录下存在 speech.md，会按 Slide N 标题写入每页备注
@@ -370,6 +392,9 @@ def main():
     parser.add_argument('--init',
                         action='store_true',
                         help='只创建 PPT 项目目录和 origin_image 子目录，不生成 PPT')
+    parser.add_argument('--compress-images',
+                        action='store_true',
+                        help='可选压缩大图；默认不压缩，避免损伤小字、图表、截图和中文文本')
 
     args = parser.parse_args()
 
@@ -415,6 +440,7 @@ def main():
         sys.exit(1)
 
     print(f"找到 {len(image_files)} 张幻灯片图片\n")
+    validate_slide_jobs_ready(ppt_project_dir, image_files)
     speaker_notes = load_speaker_notes(ppt_project_dir)
     if speaker_notes:
         print(f"找到 {len(speaker_notes)} 页备注: {os.path.join(ppt_project_dir, 'speech.md')}\n")
@@ -423,7 +449,13 @@ def main():
     print(f"正在创建 PPT (宽高比: {args.aspect_ratio})...")
     print("-" * 50)
 
-    success = create_presentation(image_files, output_path, args.aspect_ratio, speaker_notes)
+    success = create_presentation(
+        image_files,
+        output_path,
+        args.aspect_ratio,
+        speaker_notes,
+        compress_images=args.compress_images,
+    )
 
     sys.exit(0 if success else 1)
 

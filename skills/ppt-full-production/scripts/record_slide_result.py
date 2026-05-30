@@ -121,6 +121,34 @@ def _matched_expected_backend(backend_used: str, expected_labels: list[str]) -> 
     )
 
 
+def _image_size(path: Path) -> tuple[int, int]:
+    try:
+        from PIL import Image
+    except ImportError as exc:
+        raise SystemExit("Pillow is required to verify generated slide images. Run codex_ppt_runtime.py bootstrap first.") from exc
+    try:
+        with Image.open(path) as image:
+            image.load()
+            return image.size
+    except Exception as exc:
+        raise SystemExit(f"Selected source is not a readable image: {path} ({exc})") from exc
+
+
+def _validate_aspect_ratio(path: Path, width: int, height: int, expected: str) -> None:
+    if expected == "16:9":
+        target = 16 / 9
+    elif expected == "4:3":
+        target = 4 / 3
+    else:
+        return
+    actual = width / height
+    if abs(actual - target) > 0.03:
+        raise SystemExit(
+            f"Generated slide image aspect ratio mismatch for {path}: "
+            f"{width}x{height}, expected {expected}."
+        )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("deck", help="Deck directory or slide_jobs.json")
@@ -129,6 +157,7 @@ def main() -> int:
     parser.add_argument("--backend-used", required=True)
     parser.add_argument("--selected-source", required=True, help="Generated image selected by the worker.")
     parser.add_argument("--qa-note", required=True)
+    parser.add_argument("--expected-aspect-ratio", choices=["16:9", "4:3"], default="16:9")
     args = parser.parse_args()
 
     deck_dir = deck_dir_from_target(args.deck)
@@ -147,6 +176,8 @@ def main() -> int:
         expected_backend_labels = _expected_backend_labels(jobs, slide, prompt_job)
         matched_expected_backend = _matched_expected_backend(backend_used, expected_backend_labels)
         source = ensure_file(Path(args.selected_source).expanduser().resolve(), "selected source image")
+        width_px, height_px = _image_size(source)
+        _validate_aspect_ratio(source, width_px, height_px, args.expected_aspect_ratio)
         out_ref = slide.get("out") or f"origin_image/{slide['slide_id']}.png"
         target = resolve_deck_path(deck_dir, out_ref)
         try:
@@ -161,6 +192,7 @@ def main() -> int:
             "agent_id": args.agent_id,
             "backend_used": backend_used,
             "selected_source": str(source),
+            "selected_source_size_px": {"width": width_px, "height": height_px},
             "selected_source_sha256": sha256_file(source),
             "final_image": rel_to_deck(deck_dir, target),
             "final_image_sha256": sha256_file(target),

@@ -321,7 +321,7 @@ def normalize_inputs(inputs, out_root="output/image-to-editable-ppt", job_dir=No
                 if source_pptx != copied[0]:
                     shutil.copy2(source_pptx, input_dir / source_pptx.name)
                 rendered_pdf = convert_office_to_pdf(copied[0], tmp_dir)
-                sources = render_pdf_pages(rendered_pdf, pages_dir, args.dpi)
+                sources = render_pdf_pages(rendered_pdf, pages_dir, dpi)
         pages = [page_record(job_dir, i, source, copied[0], i) for i, source in enumerate(sources, start=1)]
     elif suffixes <= IMG_EXTS:
         input_type = "image" if len(copied) == 1 else "images"

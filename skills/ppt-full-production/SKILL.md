@@ -28,6 +28,8 @@ This skill only performs step 3.
 The order/project folder must contain:
 
 - `order_materials.md`
+- `material_manifest.json` or equivalent ingestion notes when the source contained embedded visuals
+- `approval_log.json` when prior stages recorded approvals
 - `slide_plan.md`
 - `approved_style_reference.md`
 - `reference_mapping.md`
@@ -51,7 +53,7 @@ This skill includes `scripts/` wrappers for the production scripts from `codex-p
 
 Do not hand-edit slide state JSON when a local script entrypoint applies.
 
-If workflow-specific conversion becomes stable later, add a small wrapper to convert `slide_plan.md`, `approved_style_reference.md`, and `reference_mapping.md` into `deck_spec.json`. Do not add that wrapper until the document formats have been tested on real orders.
+Production should use a structured `deck_spec.json` built from the approved plan artifacts. If the project still only has Markdown plans, the parent agent must either create a fully structured `deck_spec.json` and validate it, or stop before generation. Do not proceed when the conversion leaves any slide's approved text, reference images, required images, preservation rules, or open-question status ambiguous.
 
 ## Production Contract
 
@@ -61,9 +63,13 @@ Before creating any prompt jobs or final slide images, validate:
 - Every slide has a row in `reference_mapping.md`.
 - Every slide maps to at least one approved reference image.
 - Every mapped reference image path exists.
+- Every mapped reference image can be opened/viewed as an actual local image.
 - Every required client image asset path exists.
+- Every required client image can be opened/viewed as an actual local image.
 - Every required client image has a role and preservation rule.
 - No open question blocks production.
+- The latest approval was returned through the user after any material plan, sample, style, or reference-mapping change.
+- Confidential/client-sensitive materials have user approval before any API/CLI fallback is used.
 
 Reference images can be reused across many slides. A deck may use one approved content reference for many pages, or it may map each slide to a different client template page.
 
@@ -147,8 +153,9 @@ Stop if:
 
 Use the same image backend policy as `codex-ppt`:
 
-- Prefer the built-in image generation/editing tool when available.
-- Use CLI/API fallback only when the built-in backend is unavailable, lacks a required capability, or the user explicitly requests fallback.
+- Use the native/built-in image generation/editing tool first.
+- Use CLI/API fallback only when the native backend is unavailable, cannot attach required visual inputs, lacks a required capability, or the user explicitly authorizes fallback.
+- Before API/CLI fallback sends client materials outside the native tool path, ask the user whether that is allowed.
 - Keep the selected backend fixed for all slides.
 
 Record the selected backend in `deck_spec.json` and every slide job.
@@ -177,7 +184,7 @@ Every slide job must be self-contained. Do not rely on conversation context.
 
 ### 4. Per-Slide Job Contract
 
-Each `prompts/slide_XX.json` must include `text_content`, `reference_images`, and `required_images` when the slide has required client assets.
+Each `prompts/slide_XX.json` must include `text_content`, `reference_images`, and `required_images` when the slide has required client assets. Do not collapse references and strict client assets into one ambiguous image list.
 
 The three mandatory payload groups for every worker are:
 
@@ -186,6 +193,8 @@ The three mandatory payload groups for every worker are:
 3. `required_images` if the slide has required client assets
 
 If `text_content` is missing, return a blocker. If `reference_images` is empty, return a blocker. If any required image is inaccessible, return a blocker.
+
+If a required client image demands exact preservation and the selected image backend cannot preserve it reliably, return a blocker instead of approximating it. Examples include logos, screenshots, charts, certificates, portraits, UI, product labels, and data-heavy figures.
 
 ### 5. Dispatch Slide Workers
 
@@ -250,6 +259,8 @@ Check:
 - title and key points are not truncated
 - style follows the slide's mapped reference image
 - required client images are present and not replaced by redraws
+- generated image aspect ratio and slide order are correct
+- no required source asset has been silently degraded or substituted
 - no unwanted page number, watermark, unrelated logo, or obvious artifact
 - important elements do not overlap
 
@@ -274,6 +285,7 @@ Before assembly, ensure `slide_jobs.json` shows all generated slides as recorded
 - Do not start if any required client image is missing.
 - Do not use path strings as a substitute for visual image input.
 - Do not let workers invent missing required images.
+- Use the native/built-in image generation backend first; API/CLI fallback requires native unavailability/insufficiency or explicit user authorization.
 - Every final slide image must be produced by the selected image backend.
 - Do not create final slides with local drawing, HTML/SVG/canvas screenshots, Pillow, python-pptx/PptxGenJS, or manual overlays.
 - Keep the selected image backend fixed for all slides.

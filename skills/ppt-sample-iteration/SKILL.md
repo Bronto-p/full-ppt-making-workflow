@@ -29,11 +29,12 @@ The order folder should contain:
 
 - `order_materials.md`
 - `slide_plan.md`
+- `material_manifest.json` or equivalent ingestion notes when source files contain embedded visuals
 - the source files referenced by those plans
 
 If `slide_plan.md` is missing, stop and ask the user to run or provide the output from `ppt-order-planner` first.
 
-If the full slide plan has not been approved by the client or user, stop and ask for plan approval first. The approved plan must cover each slide's text, image usage, template/style plan, draft reference-image mapping, and sample strategy.
+If the full slide plan has not been approved through the user, stop and ask the user for plan approval first. The user is responsible for asking the client when client approval is needed. The approved plan must cover each slide's text, image usage, template/style plan, draft reference-image mapping, sample strategy, and whether embedded visuals were correctly read.
 
 If client feedback is provided, read it before planning the next sample round.
 
@@ -46,6 +47,7 @@ If client feedback is provided, read it before planning the next sample round.
 - A reference image may come from an approved generated sample, a rendered client template page, a client-provided style/reference image, or another client-approved visual reference.
 - Text-only style descriptions are not enough for full production.
 - Use image-based slide sample generation consistent with the final production approach.
+- Use the native/built-in image generation backend first. Consider API/CLI fallback only if the native backend is unavailable, cannot attach required visual inputs, lacks a required capability, or the user explicitly authorizes fallback.
 - Do not treat a verbal style direction as approved until the client has approved sample images.
 - Do not proceed to full deck generation during this skill.
 - If client feedback changes the style, layout, text density, image treatment, or template usage, update the plan before generating another sample.
@@ -116,6 +118,7 @@ Required structure:
 - Round:
 - Strategy:
 - Number of samples:
+- Image backend: native/built-in first; API/CLI fallback only if user-authorized
 
 ## Samples To Produce
 
@@ -125,6 +128,8 @@ Required structure:
 - Text source:
 - Template/style source:
 - Required images:
+- Reference images:
+- Embedded/source visuals to verify:
 - What this sample should prove:
 
 ### Sample B
@@ -143,6 +148,7 @@ Use this format:
 ## Round 1
 - Samples shown:
 - Client decision:
+- Approval returned through user:
 - Requested changes:
 - Rejected elements:
 - Approved elements:
@@ -161,8 +167,9 @@ Required structure:
 ## Approval
 - Approved round:
 - Approved sample files:
-- Approved by:
+- Approved by: user-confirmed client approval or user approval
 - Date:
+- Approved artifact hashes:
 
 ## Final Template / Style Description
 - Overall direction:
@@ -282,7 +289,9 @@ For each round:
 
 Do not call the style approved from your own judgment. Approval must come from the user or client feedback provided by the user.
 
-Do not call the reference mapping approved from your own judgment if the mapping changes the client's plan. If the mapping follows the already approved plan and sample feedback, record it; otherwise ask for confirmation.
+Do not call the reference mapping approved from your own judgment if the mapping changes the client's plan. If the mapping follows the already approved plan and sample feedback, record it; otherwise ask the user for confirmation.
+
+Every new approval checkpoint must return to the user. The agent does not ask the client directly. The user decides whether to ask the client and then reports the result.
 
 ## What To Report
 
@@ -301,6 +310,7 @@ After feedback, report:
 - whether `approved_style_reference.md` was created
 - whether `reference_mapping.md` now maps every slide to a reference image
 - that full deck production has not started
+- whether another user/client approval is required before moving on
 
 ## Handoff To Full Production
 

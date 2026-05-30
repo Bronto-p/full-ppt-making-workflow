@@ -6,6 +6,8 @@ Read this before full-deck image generation, preparing slide jobs, dispatching w
 
 Every final slide image must be produced by the selected image generation backend. Do not create final slides with local drawing, HTML/SVG/canvas screenshots, Pillow overlays, python-pptx/PptxGenJS layouts, or manual compositing.
 
+The selected backend should be the native/built-in image generation tool unless it is unavailable, insufficient for required image inputs, or the user explicitly authorizes CLI/API fallback.
+
 ## Worker Inputs
 
 Each slide worker must receive three payload groups:
@@ -15,6 +17,8 @@ Each slide worker must receive three payload groups:
 3. `required_images`: actual client image assets when the slide requires them.
 
 A path is traceability. It is not visual input by itself. If the worker cannot open, view, or attach a required image to the backend, it must return a blocker.
+
+Do not collapse `reference_images` and `required_images` into one ambiguous list. A reference image is visual guidance; a required image is strict client content.
 
 ## Parent Responsibilities
 
@@ -36,4 +40,4 @@ Dispatch one worker per slide when subagents are available. Record dispatch with
 
 ## QA Before Recording
 
-Before recording a result, inspect the image for text accuracy, readability, reference-style match, required asset preservation, and obvious layout artifacts.
+Before recording a result, inspect the image for text accuracy, readability, reference-style match, required asset preservation, aspect ratio, numeric slide order, and obvious layout artifacts.

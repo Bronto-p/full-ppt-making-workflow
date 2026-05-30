@@ -12,7 +12,7 @@ import json
 from pathlib import Path
 import re
 import sys
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from slide_run_state import (
     DEFAULT_MAX_CONCURRENT_SLIDES,
@@ -81,6 +81,29 @@ def _resolve_image_path(path: str, *, base_dir: Path) -> str:
     return str((base_dir / candidate).resolve())
 
 
+def _is_remote_or_data_path(path: str) -> bool:
+    return bool(re.match(r"^[a-zA-Z][a-zA-Z0-9+.-]*:", path)) and not Path(path).is_absolute()
+
+
+def _ensure_viewable_image(path: str, *, slide_number: int, image_index: int, image_group: str) -> None:
+    if _is_remote_or_data_path(path):
+        _die(
+            f"Slide {slide_number}: {image_group} entry {image_index} uses non-local path `{path}`. "
+            "Download or export it as a local image before production."
+        )
+    image_path = Path(path)
+    if not image_path.exists() or not image_path.is_file():
+        _die(f"Slide {slide_number}: missing {image_group} entry {image_index}: {image_path}")
+    try:
+        from PIL import Image
+        with Image.open(image_path) as image:
+            image.verify()
+    except ImportError:
+        _die("Pillow is required to verify production image inputs. Run codex_ppt_runtime.py bootstrap first.")
+    except Exception as exc:
+        _die(f"Slide {slide_number}: cannot open {image_group} entry {image_index} as an image: {image_path} ({exc})")
+
+
 def _normalize_input_image(entry: Any, *, slide_number: int, image_index: int, base_dir: Path) -> Dict[str, Any]:
     if isinstance(entry, dict):
         image = dict(entry)
@@ -92,12 +115,14 @@ def _normalize_input_image(entry: Any, *, slide_number: int, image_index: int, b
                 image.setdefault("role", parsed["role"])
         if isinstance(image.get("path"), str):
             image["path"] = _resolve_image_path(image["path"], base_dir=base_dir)
+        if not str(image.get("role") or "").strip():
+            image["role"] = "reference image"
         return image
     if isinstance(entry, str):
         parsed = _parse_markdown_image(entry)
         if not parsed:
             _die(
-                f"Slide {slide_number}: required_images entry {image_index} must be an "
+                f"Slide {slide_number}: image entry {image_index} must be an "
                 "object or a Markdown image reference like ![alt](path)."
             )
         lowered = entry.lower()
@@ -112,11 +137,57 @@ def _normalize_input_image(entry: Any, *, slide_number: int, image_index: int, b
     _die(f"Slide {slide_number}: required_images entry {image_index} has unsupported type.")
 
 
-def _slide_images(slide: Dict[str, Any], *, slide_number: int, base_dir: Path) -> List[Dict[str, Any]]:
+def _reference_images(
+    slide: Dict[str, Any],
+    *,
+    slide_number: int,
+    global_style_reference: Optional[Dict[str, Any]],
+    base_dir: Path,
+) -> List[Dict[str, Any]]:
     images: List[Dict[str, Any]] = []
-    for index, image in enumerate(_as_list(slide.get("required_images") or slide.get("input_images")), start=1):
+    if global_style_reference:
+        images.append(global_style_reference)
+    for index, image in enumerate(_as_list(slide.get("reference_images")), start=1):
         images.append(_normalize_input_image(image, slide_number=slide_number, image_index=index, base_dir=base_dir))
     return images
+
+
+def _required_images(slide: Dict[str, Any], *, slide_number: int, base_dir: Path) -> List[Dict[str, Any]]:
+    images: List[Dict[str, Any]] = []
+    source = slide.get("required_images")
+    if source is None:
+        source = slide.get("input_images")
+    for index, image in enumerate(_as_list(source), start=1):
+        normalized = _normalize_input_image(image, slide_number=slide_number, image_index=index, base_dir=base_dir)
+        if not str(normalized.get("fidelity") or normalized.get("preservation") or normalized.get("constraints") or "").strip():
+            _die(
+                f"Slide {slide_number}: required_images entry {index} must include a preservation/fidelity rule."
+            )
+        images.append(normalized)
+    return images
+
+
+def _slide_image_groups(
+    slide: Dict[str, Any],
+    *,
+    number: int,
+    global_style_reference: Optional[Dict[str, Any]],
+    base_dir: Path,
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    refs = _reference_images(
+        slide,
+        slide_number=number,
+        global_style_reference=global_style_reference,
+        base_dir=base_dir,
+    )
+    required = _required_images(slide, slide_number=number, base_dir=base_dir)
+    if not refs:
+        _die(f"Slide {number}: reference_images must include at least one approved visual reference.")
+    for index, image in enumerate(refs, start=1):
+        _ensure_viewable_image(str(image.get("path") or image.get("attachment") or ""), slide_number=number, image_index=index, image_group="reference_images")
+    for index, image in enumerate(required, start=1):
+        _ensure_viewable_image(str(image.get("path") or image.get("attachment") or ""), slide_number=number, image_index=index, image_group="required_images")
+    return refs, required
 
 
 def _sample_generation_method(spec: Dict[str, Any], *, base_dir: Path) -> Optional[Dict[str, Any]]:
@@ -188,10 +259,12 @@ def _build_prompt(
 ) -> str:
     title = str(slide.get("title") or f"Slide {number}").strip()
     style = deck.get("style", {})
-    images: List[Dict[str, Any]] = []
-    if global_style_reference:
-        images.append(global_style_reference)
-    images.extend(_slide_images(slide, slide_number=number, base_dir=base_dir))
+    reference_images, required_images = _slide_image_groups(
+        slide,
+        number=number,
+        global_style_reference=global_style_reference,
+        base_dir=base_dir,
+    )
     required_background = {
         key: value
         for key, value in {
@@ -214,9 +287,12 @@ def _build_prompt(
         _format_block("Global Style", style),
     ]
 
-    if images:
-        prompt_parts.append("## Input Images\n")
-        prompt_parts.append(_format_input_images(images))
+    prompt_parts.append("## Reference Images\n")
+    prompt_parts.append(_format_input_images(reference_images))
+    prompt_parts.append("\n")
+    if required_images:
+        prompt_parts.append("## Required Client Images\n")
+        prompt_parts.append(_format_input_images(required_images))
         prompt_parts.append("\n")
 
     prompt_parts.extend(
@@ -239,18 +315,18 @@ def _build_prompt(
         ]
     )
 
-    if global_style_reference:
+    if reference_images:
         prompt_parts.append(
             "## Style Reference Rule\n"
-            "Use Image 1 as the approved sample-slide style reference. Match its palette, "
+            "Use the reference images only as approved visual guidance. Match their palette, "
             "typography mood, density, texture, and overall visual identity. Do not copy "
             "its exact layout unless this slide's layout explicitly asks for it.\n"
         )
 
-    if images:
+    if required_images:
         prompt_parts.append(
-            "## Input Image Handling Rules\n"
-            "For any input image marked as a strict input asset, include it visibly and "
+            "## Required Client Image Handling Rules\n"
+            "Required client images are strict input assets. Include them visibly and "
             "preserve its content. Do not redraw, replace, relabel, or invent a similar "
             "figure. Scale and crop only as needed for composition while keeping the "
             "important labels, arrows, data, and relationships recognizable.\n"
@@ -273,11 +349,13 @@ def _job_images(
     global_style_reference: Optional[Dict[str, Any]],
     base_dir: Path,
 ) -> List[Dict[str, Any]]:
-    images: List[Dict[str, Any]] = []
-    if global_style_reference:
-        images.append(global_style_reference)
-    images.extend(_slide_images(slide, slide_number=number, base_dir=base_dir))
-    return images
+    reference_images, required_images = _slide_image_groups(
+        slide,
+        number=number,
+        global_style_reference=global_style_reference,
+        base_dir=base_dir,
+    )
+    return reference_images + required_images
 
 
 def _write_template(path: Path) -> None:
@@ -344,6 +422,13 @@ def _write_template(path: Path) -> None:
                     "strict input asset and comparison chart\n\n![Result chart](assets/figures/result_02.png)",
                 ],
                 "layout": {"composition": "source figure left, explanation cards right"},
+                "reference_images": [
+                    {
+                        "path": "/absolute/path/to/approved-data-reference.png",
+                        "role": "approved data slide style/layout reference",
+                        "fidelity": "match style and layout language only",
+                    }
+                ],
             },
         ],
     }
@@ -419,6 +504,7 @@ def main() -> int:
         or spec.get("selected_image_backend")
         or spec.get("image_backend")
         or _method_backend_label(sample_generation_method)
+        or "built-in image tool"
     )
     slide_job_entries: List[Dict[str, Any]] = []
 
@@ -432,12 +518,25 @@ def main() -> int:
             global_style_reference=slide_style_reference,
             base_dir=spec_dir,
         )
-        images = _job_images(slide, number=number, global_style_reference=slide_style_reference, base_dir=spec_dir)
+        reference_images, required_images = _slide_image_groups(
+            slide,
+            number=number,
+            global_style_reference=slide_style_reference,
+            base_dir=spec_dir,
+        )
+        images = reference_images + required_images
         job = {
             "slide": number,
             "title": slide.get("title", f"Slide {number}"),
             "prompt": prompt,
             "out": f"slide_{number:02d}.png",
+            "text_content": {
+                "title": title if (title := str(slide.get("title") or f"Slide {number}").strip()) else f"Slide {number}",
+                "key_points": _string_list(slide.get("key_points")),
+                "speaker_focus": slide.get("speaker_focus"),
+            },
+            "reference_images": reference_images,
+            "required_images": required_images,
             "input_images": images,
             "requires_context_images": bool(images),
             "expected_backend": selected_backend,
@@ -470,6 +569,8 @@ def main() -> int:
                 "title": slide.get("title", f"Slide {number}"),
                 "job": rel_to_deck(out_dir, prompt_path),
                 "out": rel_to_deck(out_dir, final_image),
+                "reference_images": reference_images,
+                "required_images": required_images,
                 "input_images": images,
                 "requires_context_images": bool(images),
                 "status": status,

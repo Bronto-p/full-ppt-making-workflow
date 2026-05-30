@@ -24,6 +24,8 @@ The goal is not to place a full-slide screenshot behind editable text. The goal 
 Best input is the full third-stage production project folder containing:
 
 - `origin_image/slide_XX.png`
+- `material_manifest.json`
+- `approval_log.json`
 - `slide_plan.md`
 - `approved_style_reference.md`
 - `reference_mapping.md`
@@ -31,7 +33,7 @@ Best input is the full third-stage production project folder containing:
 - required client image assets
 - final image-based `.pptx`, if available
 
-If only an image-based PPT/PPTX, PDF, or slide images are provided, this skill can still run, but it must report that it lacks prior production metadata and may need more inspection or user confirmation.
+If only an image-based PPT/PPTX, PDF, or slide images are provided, this skill can still run, but it must report that it lacks prior production metadata and may need more inspection or user confirmation. If required client images cannot be identified from original assets, ask the user before reconstructing those pages.
 
 ## Relationship To Image-To-Editable-PPT
 
@@ -65,7 +67,7 @@ This skill includes `scripts/` wrappers for the page reconstruction scripts from
 
 Use these local script entrypoints whenever compatible.
 
-If workflow-specific preparation becomes stable later, add a small wrapper to connect Stage 3 artifacts (`origin_image`, `prompts/slide_XX.json`, `slide_plan.md`, `reference_mapping.md`, and original client assets) to the page run structure expected by `image-to-editable-ppt`. Do not add that wrapper until tested on real orders.
+When Stage 3 artifacts exist, connect `origin_image`, `prompts/slide_XX.json`, `slide_plan.md`, `reference_mapping.md`, `material_manifest.json`, approval records, and original client assets into each page request. If this cannot be done reliably, stop and report exactly which pages lack metadata or original assets.
 
 ## Reference Map
 
@@ -77,7 +79,7 @@ Read these before dispatching or doing page reconstruction:
 - `references/page-worker-contract.md`: worker prompt requirements and return contract.
 - `prompts/page-worker.md`: page worker handoff template.
 
-Use `$imagegen` for all image generation, image editing, background generation, client-image-preserving fusion, transparent assets, and repairs. Read:
+Use the native/built-in `$imagegen` path first for all image generation, image editing, background generation, client-image-preserving fusion, transparent assets, and repairs. Use API/CLI fallback only if native image generation is unavailable, insufficient, or explicitly authorized by the user. Read:
 
 ```text
 ${CODEX_HOME:-$HOME/.codex}/skills/.system/imagegen/SKILL.md
@@ -88,6 +90,7 @@ ${CODEX_HOME:-$HOME/.codex}/skills/.system/imagegen/SKILL.md
 1. Prepare the editable reconstruction run.
    - Normalize the input into page images: one `source.png` per slide.
    - If the third-stage project exists, connect each page to its `prompts/slide_XX.json`, `slide_plan.md` entry, `reference_mapping.md` entry, and required client images.
+   - Carry forward material visibility notes, approval records, and any required asset preservation policy.
    - Preserve speaker notes when available.
 
 2. Dispatch every page to a page subagent.
@@ -119,6 +122,7 @@ ${CODEX_HOME:-$HOME/.codex}/skills/.system/imagegen/SKILL.md
 
 - The original full-slide source image alone is not enough when the slide contains client-required images. Provide the full slide source and the original client asset images to the page worker.
 - Client-required images should be preserved through imagegen using the original image asset as input, not inferred only from the flattened slide screenshot.
+- If the original client asset is missing or cannot be opened, return a blocker for that page unless the user explicitly accepts reconstruction from the flattened source only.
 - By default, client-required images should be visually integrated into the generated background/scene rather than pasted later as obvious floating overlays.
 - If a client image must remain independently movable/editable as a picture layer, record that decision in the manifest and preserve the original image asset.
 - Main slide text should become native editable PowerPoint text boxes.
@@ -128,6 +132,7 @@ ${CODEX_HOME:-$HOME/.codex}/skills/.system/imagegen/SKILL.md
 - Do not use SVG/native shapes to approximate complex generated visuals when imagegen or source-preserving assets would be more faithful.
 - Do not use a full-slide screenshot as the background plus editable text overlay as the final reconstruction.
 - Do not call the deck complete unless each page has required page outputs, preview, validation, and recorded result.
+- Every new approval needed during reconstruction must return to the user. The user decides whether to ask the client and then gives the result back to the agent.
 
 ## Acceptance Criteria
 
