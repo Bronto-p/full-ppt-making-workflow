@@ -1,3 +1,3 @@
 display_name: PPT Order Planner
 short_description: Turn a client PPT order folder into a slide-by-slide plan for sample iteration.
-default_prompt: Review this PPT order folder, read the client requirement document first, verify the provided materials, and create order_materials.md plus slide_plan.md with per-slide text, image assets, template/style plan, and sample strategy. Do not generate slides yet.
+default_prompt: Review this PPT order folder, read the client requirement document first, verify the provided materials, and create order_materials.md plus slide_plan.md with per-slide text, image assets, template/style plan, draft reference-image mapping, and sample strategy for client approval. Do not generate slides yet.
