@@ -46,6 +46,33 @@ Reuse the orchestration model from `image-to-editable-ppt`:
 
 Use `image-to-editable-ppt` scripts if available and compatible. Do not reimplement deterministic run/page state machinery by hand.
 
+## Script Reuse
+
+Reuse installed `image-to-editable-ppt` scripts from:
+
+```text
+/Users/yuruihe/.codex/skills/image-to-editable-ppt/scripts/
+```
+
+Use them for deterministic run/page state, page building, validation, and final assembly:
+
+- `image_to_editable_ppt_runtime.py`: bootstrap/check runtime.
+- `prepare_deck_run.py`: create run/page directories and normalize inputs when compatible.
+- `page_job_status.py`: inspect page dispatch status.
+- `record_page_dispatch.py`: record page worker dispatch.
+- `record_page_result.py`: validate and record page results.
+- `queue_page_repairs.py`: create page repair queue items.
+- `record_imagegen_result.py`: copy and record selected imagegen results.
+- `process_asset_sheet.py`: process asset sheets, crop source assets, and remove backgrounds.
+- `make_page_contact_sheet.py`: create contact sheets.
+- `build_pptx_from_manifest.py`: build page PPTX from manifest.
+- `validate_pptx.py`: validate page/final PPTX files.
+- `finalize_deck_run.py`: assemble accepted page PPTX files into final editable deck.
+
+Do not copy these scripts into this skill. Use the installed scripts whenever compatible.
+
+If workflow-specific preparation becomes stable later, add a small wrapper to connect Stage 3 artifacts (`origin_image`, `prompts/slide_XX.json`, `slide_plan.md`, `reference_mapping.md`, and original client assets) to the page run structure expected by `image-to-editable-ppt`. Do not add that wrapper until tested on real orders.
+
 ## Reference Map
 
 Read these before dispatching or doing page reconstruction:
