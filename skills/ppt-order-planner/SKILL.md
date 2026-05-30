@@ -184,7 +184,7 @@ If the client has already specified every page, preserve that structure. If the 
 
 If the client provided a template or style reference, map each slide to the relevant template page type when possible: cover, agenda, section divider, content page, image page, data page, closing page, or another visible page type. Set `Approval status` to `not approved` because a sample still needs client confirmation.
 
-If the client did not provide a template or visual reference, still write a clear template/style plan from the requirement document and the deck purpose. Describe the intended visual direction in `Current description`, set `Source` to `client verbal requirement` or `agent-designed draft`, and set `Sample strategy` to `2-3 directions` or `2-3 page type samples`.
+If the client did not provide a template or visual reference, still write a clear template/style plan from the requirement document and the deck purpose. Describe the intended visual direction in `Current description`, set `Source` to `client verbal requirement` or `agent-designed draft`, and set `Sample strategy` to `3 representative samples` unless the deck is too short or the user explicitly requests 2 samples.
 
 If the client wants an old PPT beautified or redesigned, treat the old PPT primarily as content source unless the requirement document says its existing visual style should be kept. The initial template/style plan should describe the new direction to test through samples.
 
@@ -229,9 +229,12 @@ Add a deck-level section to `slide_plan.md`:
 
 Use these defaults:
 
-- Clear client template/reference: plan one representative sample slide.
-- No template/reference, only verbal direction: plan 2-3 visual directions.
-- Old PPT beautification/redesign: plan 2-3 representative samples, such as cover, standard content, and complex image/data/process page.
+- Plan 3 sample slides by default for every order, regardless of whether the client provided a template, reference image, verbal direction, old PPT, or redesign request.
+- Use 2 samples only when the deck is very short, page types are not varied, or the user explicitly chooses a smaller sample set.
+- Choose representative page types, not only the most attractive page.
+- Default sample mix: cover/opening page, standard content page, and the most complex page type.
+- Complex page type can be image-heavy, data/process, comparison, product screenshot, timeline, case study, or another page that stresses the visual system.
+- If the client has a different template page for each slide, choose 3 representative template/page types for samples and preserve the full per-slide template mapping in the draft reference mapping plan.
 - Strongly varied deck page types: plan samples by page type rather than one generic slide.
 
 ### 7. Ask For Client Plan Confirmation
