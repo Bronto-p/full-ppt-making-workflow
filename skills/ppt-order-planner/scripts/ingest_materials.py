@@ -11,6 +11,7 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+import posixpath
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -23,8 +24,9 @@ PLAIN_TEXT_EXTS = {".txt", ".md", ".markdown", ".csv", ".tsv", ".json"}
 ZIP_MEDIA_EXTS = {".docx", ".pptx", ".xlsx"}
 OFFICE_RENDER_EXTS = {".doc", ".docx", ".ppt", ".pptx", ".xls", ".xlsx"}
 SKIP_DIRS = {"material_ingestion", "__MACOSX", ".git", "__pycache__"}
-SKIP_FILES = {"material_manifest.json", "ingestion_notes.md"}
+SKIP_FILES = {"material_manifest.json", "slide_visual_index.md", "ingestion_notes.md"}
 REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
+R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
 
 
 def now_iso() -> str:
@@ -105,6 +107,20 @@ def xml_text(xml_bytes: bytes) -> str:
     return "\n".join(parts)
 
 
+def node_text(node: ET.Element) -> str:
+    parts: list[str] = []
+    for child in node.iter():
+        tag = child.tag.rsplit("}", 1)[-1]
+        if tag in {"t", "tab"}:
+            if tag == "tab":
+                parts.append(" ")
+            elif child.text:
+                parts.append(child.text)
+        elif tag == "br":
+            parts.append("\n")
+    return re.sub(r"[ \t]+", " ", "".join(parts)).strip()
+
+
 def natural_key(value: str) -> list[Any]:
     return [int(part) if part.isdigit() else part for part in re.split(r"(\d+)", value)]
 
@@ -128,6 +144,134 @@ def extract_docx_text(archive: zipfile.ZipFile) -> tuple[str, list[str]]:
             text_parts.append(text)
             sources.append(name)
     return "\n".join(text_parts), sources
+
+
+def resolve_office_target(source_part: str, target: str) -> str:
+    if target.startswith("/"):
+        return target.lstrip("/")
+    base_dir = posixpath.dirname(source_part)
+    return posixpath.normpath(posixpath.join(base_dir, target))
+
+
+def docx_relationships(archive: zipfile.ZipFile, rels_part: str, source_part: str) -> dict[str, dict[str, str]]:
+    relationships: dict[str, dict[str, str]] = {}
+    if rels_part not in archive.namelist():
+        return relationships
+    try:
+        rels_root = ET.fromstring(archive.read(rels_part))
+    except ET.ParseError:
+        return relationships
+    for relationship in rels_root.findall(f"{{{REL_NS}}}Relationship"):
+        rel_id = relationship.attrib.get("Id", "")
+        target = relationship.attrib.get("Target", "")
+        if not rel_id or not target:
+            continue
+        relationships[rel_id] = {
+            "target": target,
+            "resolved_target": resolve_office_target(source_part, target),
+            "type": relationship.attrib.get("Type", ""),
+            "mode": relationship.attrib.get("TargetMode", ""),
+        }
+    return relationships
+
+
+def slide_marker_from_text(text: str) -> str | None:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if not normalized:
+        return None
+    match = re.search(r"\bP\s*(\d+)(?:\s*[-–—]\s*(\d+))?\b[：:\s-]*(.{0,80})", normalized, re.IGNORECASE)
+    if not match:
+        match = re.search(r"第\s*(\d+)\s*页[：:\s-]*(.{0,80})", normalized)
+        if not match:
+            return None
+        return f"P{match.group(1)} {match.group(2).strip()}".strip()
+    start = match.group(1)
+    end = match.group(2)
+    suffix = match.group(3).strip()
+    label = f"P{start}-{end}" if end else f"P{start}"
+    return f"{label} {suffix}".strip()
+
+
+def build_docx_visual_index(
+    path: Path,
+    root: Path,
+    archive: zipfile.ZipFile,
+    media_items: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    names = set(archive.namelist())
+    if "word/document.xml" not in names:
+        return []
+    media_by_member = {
+        str(item.get("source_member")): item
+        for item in media_items
+        if item.get("source_member")
+    }
+    rels = docx_relationships(archive, "word/_rels/document.xml.rels", "word/document.xml")
+    try:
+        document_root = ET.fromstring(archive.read("word/document.xml"))
+    except ET.ParseError:
+        return []
+
+    blocks = []
+    for node in document_root.iter():
+        tag = node.tag.rsplit("}", 1)[-1]
+        if tag in {"p", "tbl"}:
+            blocks.append(node)
+
+    visual_index: list[dict[str, Any]] = []
+    current_marker: str | None = None
+    recent_texts: list[str] = []
+    pending_images: list[dict[str, Any]] = []
+
+    for block_index, block in enumerate(blocks, start=1):
+        text = node_text(block)
+        marker = slide_marker_from_text(text)
+        if marker:
+            current_marker = marker
+        if text:
+            recent_texts.append(text)
+            recent_texts = recent_texts[-4:]
+
+        block_images: list[dict[str, Any]] = []
+        for child in block.iter():
+            tag = child.tag.rsplit("}", 1)[-1]
+            if tag != "blip":
+                continue
+            rel_id = child.attrib.get(f"{{{R_NS}}}embed") or child.attrib.get(f"{{{R_NS}}}link")
+            if not rel_id:
+                continue
+            relationship = rels.get(rel_id, {})
+            resolved = relationship.get("resolved_target", "")
+            media_item = media_by_member.get(resolved)
+            item = {
+                "source_file": rel(root, path),
+                "kind": "docx_inline_visual_context",
+                "block_index": block_index,
+                "relationship_id": rel_id,
+                "source_member": resolved,
+                "output": media_item.get("output") if media_item else None,
+                "visual_status": media_item.get("visual_status") if media_item else "blocked",
+                "nearest_slide_marker": current_marker,
+                "same_block_text": text[:500],
+                "preceding_text": recent_texts[-3:],
+                "assignment_hint": "Assign this visual to the slide/page named by nearest_slide_marker unless direct inspection disproves it.",
+            }
+            if media_item:
+                for key in ("width", "height", "mode", "sha256"):
+                    if key in media_item:
+                        item[key] = media_item[key]
+            block_images.append(item)
+
+        if block_images:
+            visual_index.extend(block_images)
+            pending_images.extend(block_images)
+            pending_images = pending_images[-8:]
+        elif text and pending_images:
+            for image in pending_images:
+                if "following_text" not in image:
+                    image["following_text"] = text[:500]
+
+    return visual_index
 
 
 def extract_pptx_text(archive: zipfile.ZipFile) -> tuple[str, list[str]]:
@@ -486,9 +630,41 @@ def make_contact_sheet(root: Path, images: list[dict[str, Any]], output_root: Pa
     return rel(root, out)
 
 
+def write_slide_visual_index(path: Path, items: list[dict[str, Any]]) -> None:
+    lines = ["# Slide Visual Index", ""]
+    if not items:
+        lines.append("- No DOCX inline visual context was detected.")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        return
+
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for item in items:
+        marker = str(item.get("nearest_slide_marker") or "Unassigned")
+        groups.setdefault(marker, []).append(item)
+
+    for marker, grouped_items in groups.items():
+        lines.extend([f"## {marker}", ""])
+        for index, item in enumerate(grouped_items, start=1):
+            output = item.get("output") or item.get("source_member") or "missing output"
+            lines.append(f"- Visual {index}: `{output}`")
+            if item.get("width") and item.get("height"):
+                lines.append(f"  - Size: {item['width']}x{item['height']}")
+            if item.get("same_block_text"):
+                lines.append(f"  - Same block text: {str(item['same_block_text'])[:180]}")
+            preceding = item.get("preceding_text") or []
+            if preceding:
+                lines.append(f"  - Preceding text: {str(preceding[-1])[:180]}")
+            if item.get("following_text"):
+                lines.append(f"  - Following text: {str(item['following_text'])[:180]}")
+            lines.append("  - Assignment hint: assign to this slide/page unless visual inspection disproves it.")
+        lines.append("")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def scan(root: Path, output_root: Path, dpi: int) -> dict[str, Any]:
     files = []
     derived = []
+    slide_visual_index = []
     contact_sheet_items = []
     for path in sorted(root.rglob("*")):
         if not path.is_file():
@@ -516,6 +692,22 @@ def scan(root: Path, output_root: Path, dpi: int) -> dict[str, Any]:
             if suffix in ZIP_MEDIA_EXTS:
                 media_items = extract_zip_media(path, root, output_root)
                 derived.extend(media_items)
+                if suffix == ".docx":
+                    try:
+                        with zipfile.ZipFile(path) as archive:
+                            docx_index = build_docx_visual_index(path, root, archive, media_items)
+                        if docx_index:
+                            slide_visual_index.extend(docx_index)
+                            derived.extend(docx_index)
+                    except Exception as exc:
+                        derived.append(
+                            {
+                                "source_file": rel(root, path),
+                                "kind": "docx_inline_visual_context",
+                                "visual_status": "blocked",
+                                "blocker": str(exc),
+                            }
+                        )
             findings = office_container_findings(path, root) if suffix in ZIP_MEDIA_EXTS else []
             rendered = render_office(path, root, output_root, dpi)
             derived.extend(rendered)
@@ -547,6 +739,7 @@ def scan(root: Path, output_root: Path, dpi: int) -> dict[str, Any]:
         "root": str(root),
         "files": files,
         "derived_visuals": derived,
+        "slide_visual_index": slide_visual_index,
         "contact_sheets": [contact_sheet] if contact_sheet else [],
         "notes": [
             "Text extraction proves text readability only; it is not a substitute for visual inspection.",
@@ -573,12 +766,15 @@ def main() -> int:
     manifest = scan(root, output_root, args.dpi)
     manifest_path = root / "material_manifest.json"
     write_json(manifest_path, manifest)
+    slide_visual_index_path = root / "slide_visual_index.md"
+    write_slide_visual_index(slide_visual_index_path, manifest.get("slide_visual_index", []))
     notes_path = root / "ingestion_notes.md"
     notes_path.write_text(
         "# Ingestion Notes\n\n"
         f"- Material manifest: `{manifest_path.name}`\n"
+        f"- Slide visual index: `{slide_visual_index_path.name}`\n"
         f"- Derived visuals: `{args.out_dir}/`\n"
-        "- Inspect rendered pages, extracted media, and contact sheets before assigning slide images.\n",
+        "- Inspect rendered pages, extracted media, slide visual index, and contact sheets before assigning slide images.\n",
         encoding="utf-8",
     )
     print(manifest_path)

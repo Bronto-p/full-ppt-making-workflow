@@ -21,6 +21,7 @@ Inputs:
 Outputs:
 
 - `material_manifest.json`
+- `slide_visual_index.md` when DOCX inline image context can be mapped
 - `material_contact_sheets/`
 - rendered document or deck pages when needed
 - extracted embedded images when available
@@ -44,12 +45,13 @@ Primary responsibility:
 - prove which files the agent can read as text
 - prove which files the agent can see visually
 - extract or render embedded pictures, charts, tables, screenshots, and scanned pages
+- map DOCX inline images to their nearest page/slide marker when possible
 - mark files that are password-protected, corrupted, linked-only, externally hosted, too large, unsupported, or visually inaccessible
 - record file hashes and normalized local paths for traceability
 
 Important rule:
 
-Do not assume a picture inside a DOCX, PDF, PPTX, spreadsheet, or archive is visible to the agent just because the container file exists. If embedded visuals matter, create rendered pages, extracted images, or contact sheets and inspect those outputs. If a client file references cloud links or externally linked media, download/export them into the order folder or mark them blocked.
+Do not assume a picture inside a DOCX, PDF, PPTX, spreadsheet, or archive is visible to the agent just because the container file exists. If embedded visuals matter, create rendered pages, extracted images, `slide_visual_index.md`, or contact sheets and inspect those outputs. If a client file references cloud links or externally linked media, download/export them into the order folder or mark them blocked.
 
 ## Stage 1: `ppt-order-planner`
 
@@ -85,6 +87,8 @@ Primary responsibility:
 - `### Open Questions`: only unresolved blockers
 
 When the source document already contains one page of slide text plus images pasted under that page, those images must be mapped to that same slide. Extracted embedded visuals are not a loose asset pool; every viewable extracted client visual must be assigned to a slide, marked as a template/style reference, or listed as unclear.
+
+If `slide_visual_index.md` exists, Stage 1 must read it before drafting `slide_plan.md`. The nearest page/slide marker in that file is the default assignment unless visual inspection disproves it.
 
 Sample planning rule:
 

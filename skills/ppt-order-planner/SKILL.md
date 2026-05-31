@@ -21,7 +21,7 @@ Use `scripts/ingest_materials.py` before planning when the order has Office/PDF/
 python skills/ppt-order-planner/scripts/ingest_materials.py <order_folder>
 ```
 
-It creates `material_manifest.json`, `ingestion_notes.md`, extracted DOCX/PPTX/XLSX media where available, rendered PDF and Office pages when local dependencies are available, linked/external Office asset findings, and a contact sheet for viewable source and derived visuals. This is a visibility check, not a replacement for reading the requirement document.
+It creates `material_manifest.json`, `slide_visual_index.md`, `ingestion_notes.md`, extracted DOCX/PPTX/XLSX media where available, rendered PDF and Office pages when local dependencies are available, linked/external Office asset findings, and a contact sheet for viewable source and derived visuals. This is a visibility check, not a replacement for reading the requirement document.
 
 Use `scripts/lint_slide_plan.py` before handoff when a plan has been drafted:
 
@@ -116,7 +116,7 @@ For DOCX/PDF/TXT/MD files, inspect whether they contain:
 
 If DOCX/PDF files contain embedded images, tables, scans, charts, signatures, certificates, or screenshots, do not rely on text extraction alone. Render pages or extract the embedded media and assign those visuals to the slide/page where they appear.
 
-When a source document is page-by-page slide content with images pasted below or near each page's text, treat those images as slide-scoped required assets. Do not leave them as a global extracted-media pool. Use rendered pages, paragraph order, nearby captions, filenames, contact sheets, and direct visual inspection to map each extracted image back to its slide. If a visual's slide cannot be determined, put that exact file under the most likely slide's `Open Questions` instead of omitting it.
+When a source document is page-by-page slide content with images pasted below or near each page's text, treat those images as slide-scoped required assets. Do not leave them as a global extracted-media pool. Use `slide_visual_index.md`, rendered pages, paragraph order, nearby captions, filenames, contact sheets, and direct visual inspection to map each extracted image back to its slide. If a visual's slide cannot be determined, put that exact file under the most likely slide's `Open Questions` instead of omitting it.
 
 For images, visually inspect important or referenced files when possible. Identify likely use:
 
@@ -168,6 +168,7 @@ Required sections:
 
 ## Ingestion Outputs
 - material_manifest.json:
+- slide_visual_index.md:
 - rendered pages:
 - extracted images:
 - contact sheets:
@@ -236,6 +237,7 @@ If the client provided images, do not leave them as a general pool when their us
 
 Required image assignment rules:
 
+- Read `slide_visual_index.md` before writing `slide_plan.md` whenever it exists.
 - If an image is embedded on the same source page/section as a slide's text, assign it to that slide.
 - If multiple images appear under one slide's text, list each image under that slide with a short role.
 - If the source has rendered page images, use the rendered page as placement evidence and the extracted image as the strict asset when available.
