@@ -1,0 +1,4 @@
+interface:
+  display_name: "PPT Plan Order"
+  short_description: "Turn PPT order materials into a concise slide plan."
+  default_prompt: "Plan this PPT order from my materials."

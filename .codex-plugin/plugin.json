@@ -1,25 +1,22 @@
 {
-  "name": "full-ppt-making-workflow",
-  "version": "0.1.1+codex.20260531030052",
-  "description": "English Codex workflow for planning, sampling, producing, and reconstructing PPT decks.",
+  "name": "ppt-workflow-core",
+  "version": "0.1.0",
+  "description": "Simplified independent PPT workflow skills for planning, sampling, production, and editability.",
   "author": {
     "name": "Local developer"
   },
   "skills": "./skills/",
   "interface": {
-    "displayName": "Full PPT Making Workflow",
-    "shortDescription": "English PPT planning, sample, production, and reconstruction workflow.",
-    "longDescription": "Installs four English PPT workflow skills for order planning, sample-slide iteration, full image-based deck production, and editable PPT reconstruction.",
+    "displayName": "PPT Workflow Core",
+    "shortDescription": "Simplified PPT planning, sampling, production, and editability skills.",
+    "longDescription": "Provides independent PPT workflow skills that can be used alone or connected through lightweight handoff files.",
     "developerName": "Local developer",
     "category": "Productivity",
-    "capabilities": [
-      "Write",
-      "Interactive"
-    ],
+    "capabilities": [],
     "defaultPrompt": [
-      "Plan a PPT order from my materials.",
-      "Run a sample slide iteration.",
-      "Produce the full PPT deck."
+      "Plan this PPT order from my client materials.",
+      "Create PPT style samples.",
+      "Produce the final PPT deck."
     ]
   }
 }

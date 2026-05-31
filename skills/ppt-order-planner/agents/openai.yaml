@@ -1,3 +1,0 @@
-interface:
-  display_name: PPT Order Planner
-  short_description: Turn a client PPT order folder into a slide-by-slide plan for sample iteration.
