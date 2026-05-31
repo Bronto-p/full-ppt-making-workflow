@@ -1,0 +1,4 @@
+interface:
+  display_name: "PPT Full Production"
+  short_description: "Produce final PPT decks from approved samples"
+  default_prompt: "Use $ppt-full-production to produce the full deck from my approved PPT sample and ppt_plan.md."
