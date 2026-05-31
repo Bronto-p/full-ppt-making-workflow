@@ -1,3 +1,3 @@
-display_name: PPT Editable Reconstruction
-short_description: Convert image-based PPT workflow output into a more editable layered PPTX.
-default_prompt: Convert this final image-based PPT project into an editable PPTX. Use the full slide images plus prior slide metadata and original client image assets. Rebuild each page with clean/generated backgrounds, imagegen-preserved client images, layered visual assets, and native editable text boxes.
+interface:
+  display_name: PPT Editable Reconstruction
+  short_description: Convert image-based PPT workflow output into a more editable layered PPTX.
