@@ -1,6 +1,6 @@
 {
   "name": "ppt-workflow-core",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.20260531134029",
   "description": "Simplified independent PPT workflow skills for planning, sampling, production, and editability.",
   "author": {
     "name": "Local developer"
