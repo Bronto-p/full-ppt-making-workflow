@@ -208,7 +208,9 @@ If a required client image demands exact preservation and the selected image bac
 
 Use the production discipline from `codex-ppt`:
 
-- One slide job per worker whenever subagents are available.
+- One slide job per worker is the default production path.
+- If subagents are available, use them. Do not generate the full deck serially in the parent agent unless subagents are unavailable or the user explicitly asks for a single-agent run.
+- If subagents are unavailable, stop and report the blocker before image generation; do not silently switch workflows.
 - The parent owns `outline.md`, `deck_spec.json`, `prompts/`, `origin_image/`, state files, QA, `speech.md`, and final assembly.
 - Workers must not edit shared project files.
 - The parent records dispatch and results with state scripts.
@@ -231,8 +233,9 @@ Mandatory input payload:
 Input images prepared by parent:
 - <absolute path> - approved reference image; use for style/layout/template reference
 - <absolute path> - strict required client asset; preserve original content
+- <absolute path> - rendered source page or placement evidence, if needed
 
-Read the JSON job. Open/view every listed image before generation. Use the selected image backend only.
+Read the JSON job. Open/view every listed bitmap before generation. Use the selected image backend only.
 If any reference image or required image cannot be accessed, viewed, or attached to the image backend, return blocker=<reason>.
 
 Return only:

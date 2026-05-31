@@ -137,16 +137,20 @@ def lint(path: Path, *, allow_open_questions: bool) -> list[str]:
         if number in seen:
             problems.append(f"Slide {number}: duplicate slide heading.")
         seen.add(number)
-        text = section_block(slide, "Text")
-        style = section_block(slide, "Template / Style Plan") or section_block(slide, "Template")
+        text = section_block(slide, "Content") or section_block(slide, "Text")
+        style = (
+            section_block(slide, "Template / Reference")
+            or section_block(slide, "Template / Style Plan")
+            or section_block(slide, "Template")
+        )
         images = section_block(slide, "Images")
         questions = section_block(slide, "Open Questions")
         if not text:
-            problems.append(f"Slide {number}: missing `### Text` section.")
+            problems.append(f"Slide {number}: missing `### Content` section.")
         elif not (has_field(text, "Title") or any(line.strip() for line in text)):
             problems.append(f"Slide {number}: text section does not contain usable approved text.")
         if not style:
-            problems.append(f"Slide {number}: missing `### Template / Style Plan` section.")
+            problems.append(f"Slide {number}: missing `### Template / Reference` section.")
         elif not has_field(style, "Approval status"):
             problems.append(f"Slide {number}: style plan missing `Approval status`.")
         if not images:

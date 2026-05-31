@@ -10,7 +10,7 @@ description: Turn a client PPT order folder into the first-stage production plan
 This skill prepares a customer PPT order for the first stage of an image-based PPT workflow. It reads the client requirement document first, verifies the referenced materials in the order folder, then creates:
 
 - `order_materials.md`: what the client provided and how each material should be used.
-- `slide_plan.md`: the per-slide plan that locks text, image assets, initial template/style plan, and draft reference-image mapping.
+- `slide_plan.md`: a concise per-slide plan that locks title/subtitle/body, template/reference, and exact slide image assets.
 - `material_manifest.json` or references to existing ingestion outputs when the order contains embedded visuals, scanned pages, Office/PDF/PPT files, archives, or cloud-linked assets.
 
 ## Scripts
@@ -114,7 +114,9 @@ For DOCX/PDF/TXT/MD files, inspect whether they contain:
 - embedded images or tables
 - mixed content that needs splitting
 
-If DOCX/PDF files contain embedded images, tables, scans, charts, signatures, certificates, or screenshots, do not rely on text extraction alone. Render pages or extract the embedded media and list those outputs as production assets or references.
+If DOCX/PDF files contain embedded images, tables, scans, charts, signatures, certificates, or screenshots, do not rely on text extraction alone. Render pages or extract the embedded media and assign those visuals to the slide/page where they appear.
+
+When a source document is page-by-page slide content with images pasted below or near each page's text, treat those images as slide-scoped required assets. Do not leave them as a global extracted-media pool. Use rendered pages, paragraph order, nearby captions, filenames, contact sheets, and direct visual inspection to map each extracted image back to its slide. If a visual's slide cannot be determined, put that exact file under the most likely slide's `Open Questions` instead of omitting it.
 
 For images, visually inspect important or referenced files when possible. Identify likely use:
 
@@ -177,12 +179,7 @@ Only include conclusions supported by the requirement document or by direct insp
 
 Create a per-slide production plan in the order folder. This is the main handoff artifact for sample iteration and later full PPT generation.
 
-Every slide should lock four things:
-
-1. Text content
-2. Initial template/style plan
-3. Image assets and image policy
-4. Draft reference-image plan
+Every slide should be short and production-ready. Do not create a large nested plan when the client already provided page-by-page content.
 
 Use this format:
 
@@ -191,24 +188,19 @@ Use this format:
 
 ## Slide 1: {Title}
 
-### Text
+### Content
 - Source:
 - Rewrite allowed:
 - Title:
+- Subtitle:
 - Body:
   - ...
 - Must preserve:
   - ...
 
-### Template / Style Plan
-- Source:
-- Current description:
-- Reference files:
+### Template / Reference
 - Page type:
-- Sample required:
-- Sample strategy:
 - Draft reference image:
-- Reference mapping status:
 - Approval status:
 - Approved reference:
 
@@ -217,7 +209,11 @@ Use this format:
   - File:
     - Role:
     - Preservation:
+    - Placement evidence:
 - Optional:
+  - File:
+    - Role:
+- Placement images:
   - File:
     - Role:
 - Free image generation/search:
@@ -225,6 +221,8 @@ Use this format:
 ### Open Questions
 - ...
 ```
+
+Keep image prompts/descriptions concise. For requested or generated images, use one short production phrase plus preservation constraints, not long prose prompts. Example: `clean product photo, preserve original logo and labels`.
 
 If the client has already specified every page, preserve that structure. If the client provided long-form content instead of page-by-page content, propose a practical slide breakdown and mark it for confirmation.
 
@@ -235,6 +233,14 @@ If the client did not provide a template or visual reference, still write a clea
 If the client wants an old PPT beautified or redesigned, treat the old PPT primarily as content source unless the requirement document says its existing visual style should be kept. The initial template/style plan should describe the new direction to test through samples.
 
 If the client provided images, do not leave them as a general pool when their use can be planned. Assign them to slides where appropriate. If a required image placement is unclear, list it in `Open Questions`.
+
+Required image assignment rules:
+
+- If an image is embedded on the same source page/section as a slide's text, assign it to that slide.
+- If multiple images appear under one slide's text, list each image under that slide with a short role.
+- If the source has rendered page images, use the rendered page as placement evidence and the extracted image as the strict asset when available.
+- If only an extracted image is available, cite its extracted path and note the evidence used to map it.
+- Never drop extracted visuals from `slide_plan.md`; every viewable extracted client visual must be either assigned to a slide, marked as a template/style reference, or listed in `Unclear Items`.
 
 ### 5. Add Draft Reference Mapping Plan
 

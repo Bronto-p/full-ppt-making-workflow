@@ -71,11 +71,20 @@ Primary responsibility:
 
 - read the client requirement document first
 - verify what materials exist
-- plan every slide's text content
+- plan every slide's title, subtitle, and body content
 - plan every slide's image usage
 - plan every slide's template/style direction
 - create a draft reference-image mapping plan
 - define the sample strategy
+
+`slide_plan.md` should stay concise. Each slide should use the simple structure:
+
+- `### Content`: source, rewrite policy, title, subtitle, body, must-preserve text
+- `### Template / Reference`: page type, draft reference image, approval status, approved reference
+- `### Images`: required images, optional images, and short generated-image/search notes
+- `### Open Questions`: only unresolved blockers
+
+When the source document already contains one page of slide text plus images pasted under that page, those images must be mapped to that same slide. Extracted embedded visuals are not a loose asset pool; every viewable extracted client visual must be assigned to a slide, marked as a template/style reference, or listed as unclear.
 
 Sample planning rule:
 
@@ -200,7 +209,7 @@ Primary responsibility:
 
 - validate all approved inputs
 - build per-slide production jobs
-- dispatch one slide job per worker when available
+- dispatch one slide job per worker by default
 - ensure each worker receives the required payload
 - record dispatches, blockers, and results
 - QA every generated slide image
@@ -214,7 +223,11 @@ Every slide worker must receive:
 
 Important rule:
 
-A file path is traceability, not visual input. The parent agent must verify and prepare actual image inputs for workers whenever the runtime supports image handoff. If a worker cannot access, view, or attach a reference image or required client image to the selected image backend, it must return a blocker instead of inventing a replacement.
+A file path is traceability, not visual input. The parent agent must verify and prepare actual bitmap inputs for workers whenever the runtime supports image handoff. If a worker cannot access, view, or attach a reference image, required client image, or placement image to the selected image backend, it must return a blocker instead of inventing a replacement.
+
+Subagent rule:
+
+Use one subagent per slide when subagents are available. If subagents are unavailable, stop and report that blocker before final image generation unless the user explicitly authorizes a single-agent production run.
 
 Backend rule:
 

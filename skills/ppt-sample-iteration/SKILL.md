@@ -283,6 +283,18 @@ samples/approved/content_reference.png
 
 Keep samples separate from final production images. Do not put sample images into `origin_image/` unless full production later intentionally accepts that slide as final.
 
+## Sample Generation Handoff
+
+When creating sample slide images, use the same worker discipline as full production whenever subagents are available. The parent agent prepares the sample plan and image inputs; a sample worker generates one sample image and returns the selected generated file plus a short QA note.
+
+For each sample worker, provide actual bitmap inputs, not just filenames:
+
+- approved or draft reference images for style/layout
+- required client images assigned to that sample slide
+- rendered source pages when they are needed to understand placement
+
+If a sample worker cannot open, view, or attach a bitmap input to the selected image backend, it must return a blocker. Do not ask the user to upload images that already exist locally unless the current runtime truly cannot hand them to the image backend or worker.
+
 ## Feedback Loop
 
 For each round:

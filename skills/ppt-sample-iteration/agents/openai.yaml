@@ -1,3 +1,3 @@
 display_name: PPT Sample Iteration
 short_description: Generate and revise sample-slide plans until the client approves the PPT style.
-default_prompt: Use the approved slide_plan.md to plan sample slides, incorporate client feedback, update the plan, and create approved_style_reference.md plus reference_mapping.md only after approval. Every slide must map to a reference image before full production. Do not generate the full deck.
+default_prompt: Use the approved slide_plan.md to plan sample slides, incorporate client feedback, update the plan, and create approved_style_reference.md plus reference_mapping.md only after approval. Generate sample images through the image backend with actual bitmap inputs; use sample workers when available. Every slide must map to a reference image before full production. Do not generate the full deck.

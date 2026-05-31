@@ -14,12 +14,14 @@ Mandatory payload:
 - text_content: approved text from slide_plan.md
 - reference_images: actual approved reference image inputs prepared by parent
 - required_images: actual client asset image inputs prepared by parent, if any
+- placement_images: rendered source pages or other bitmap placement evidence, if needed
 
 Input images prepared by parent:
 - <absolute path> - approved reference image; use for style/layout/template reference
 - <absolute path> - strict required client asset; preserve original content
+- <absolute path> - rendered source page or placement evidence; use to understand where client assets belong
 
-Read the JSON job file. Open/view every listed reference image and required image before generation. Use the selected image backend only.
+Read the JSON job file. Open/view every listed reference image, required image, and placement image before generation. Use the selected image backend only.
 
 Use the native/built-in image generation backend first. Use CLI/API fallback only if the parent says the user authorized it or the native backend is unavailable/insufficient. If fallback would require sending client assets outside the native path and authorization is not stated, return blocker=<reason>.
 
@@ -30,7 +32,7 @@ Forbidden for final slide image creation:
 - python-pptx/PptxGenJS/native PPT layout screenshots
 - manually composited text, card, chart, or image overlays
 
-If any reference image or required image cannot be accessed, viewed, or attached to the image backend, stop and return blocker=<reason>.
+If any reference image, required image, or placement image cannot be accessed, viewed, or attached to the image backend, stop and return blocker=<reason>.
 If the selected image backend is unavailable, stop and return blocker=<reason>.
 If a strict client asset cannot be preserved reliably by the selected backend, stop and return blocker=<reason>; do not create a similar replacement.
 Do not edit slide job files, origin_image, speech.md, or assemble the PPT.

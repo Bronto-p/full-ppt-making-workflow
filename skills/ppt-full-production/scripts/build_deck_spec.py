@@ -198,6 +198,57 @@ def required_images_from_slide(slide: dict[str, Any], project_root: Path, proble
     return normalized
 
 
+def placement_images_from_slide(slide: dict[str, Any], project_root: Path, problems: list[str]) -> list[dict[str, Any]]:
+    images = section_block(slide, "Images")
+    placement: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    in_placement = False
+    for line in images:
+        if re.match(r"^\s*[-*]\s*Placement images\s*:", line, re.IGNORECASE):
+            in_placement = True
+            continue
+        if re.match(r"^\s*[-*]\s*(Required|Optional|Free image generation/search)\s*:", line, re.IGNORECASE):
+            in_placement = False
+            if current:
+                placement.append(current)
+                current = None
+            continue
+        if not in_placement:
+            continue
+        match = re.match(r"^\s*[-*]\s*(File|Role|Fidelity|Constraints)\s*:\s*(.*)$", line, re.IGNORECASE)
+        if not match:
+            continue
+        key = match.group(1).lower()
+        value = normalize_cell(match.group(2))
+        if key == "file":
+            if current:
+                placement.append(current)
+            current = {"path": value}
+        elif current is not None:
+            current[key] = value
+    if current:
+        placement.append(current)
+
+    normalized: list[dict[str, Any]] = []
+    for index, item in enumerate(placement, start=1):
+        path_value = item.get("path", "")
+        if path_value.lower() in EMPTY_MARKERS:
+            continue
+        path = resolve_path(project_root, path_value)
+        if not path.exists():
+            problems.append(f"Slide {slide['number']}: placement image does not exist: {path_value}")
+            continue
+        normalized.append(
+            {
+                "path": str(path),
+                "role": item.get("role") or "source placement evidence",
+                "fidelity": item.get("fidelity") or item.get("constraints") or "use for placement only; do not copy unrelated content",
+                "sha256": sha256_file(path),
+            }
+        )
+    return normalized
+
+
 def parse_mapping(content: str) -> tuple[dict[str, list[str]], dict[int, dict[str, Any]]]:
     section = ""
     header: list[str] | None = None
@@ -286,14 +337,14 @@ def build_spec(args: argparse.Namespace) -> tuple[dict[str, Any], list[str]]:
         if number in seen_numbers:
             problems.append(f"Slide {number}: duplicate slide number.")
         seen_numbers.add(number)
-        text = section_block(slide, "Text")
+        text = section_block(slide, "Content") or section_block(slide, "Text")
         questions = unresolved_questions(section_block(slide, "Open Questions"))
         if questions:
             problems.append(f"Slide {number}: unresolved open questions: {'; '.join(questions)}")
         title = field_value(text, "Title") or slide["heading_title"] or f"Slide {number}"
         body_values = [
             value for value in bullet_values(text)
-            if not value.lower().startswith(("source:", "rewrite allowed:", "title:", "must preserve:"))
+            if not value.lower().startswith(("source:", "rewrite allowed:", "title:", "subtitle:", "must preserve:"))
         ]
         mapping = slide_mapping.get(number)
         if not mapping:
@@ -333,6 +384,7 @@ def build_spec(args: argparse.Namespace) -> tuple[dict[str, Any], list[str]]:
                 },
                 "reference_images": reference_images,
                 "required_images": required_images_from_slide(slide, project_root, problems),
+                "placement_images": placement_images_from_slide(slide, project_root, problems),
                 "constraints": [],
             }
         )

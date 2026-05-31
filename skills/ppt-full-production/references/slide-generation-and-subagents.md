@@ -36,7 +36,9 @@ Workers must not edit shared files. They return generated image candidates and n
 
 ## Dispatch Discipline
 
-Dispatch one worker per slide when subagents are available. Record dispatch with `scripts/record_slide_dispatch.py`, results with `scripts/record_slide_result.py`, and blockers with `scripts/record_slide_blocker.py`.
+Dispatch one worker per slide by default. If subagents are available, use them. If they are unavailable, stop and report that blocker before final image generation unless the user explicitly authorizes a single-agent production run.
+
+Record dispatch with `scripts/record_slide_dispatch.py`, results with `scripts/record_slide_result.py`, and blockers with `scripts/record_slide_blocker.py`.
 
 ## QA Before Recording
 

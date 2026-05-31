@@ -183,13 +183,23 @@ def _required_images(slide: Dict[str, Any], *, slide_number: int, base_dir: Path
     return images
 
 
+def _placement_images(slide: Dict[str, Any], *, slide_number: int, base_dir: Path) -> List[Dict[str, Any]]:
+    images: List[Dict[str, Any]] = []
+    for index, image in enumerate(_as_list(slide.get("placement_images")), start=1):
+        normalized = _normalize_input_image(image, slide_number=slide_number, image_index=index, base_dir=base_dir)
+        normalized.setdefault("role", "placement evidence")
+        normalized.setdefault("fidelity", "use for placement only; do not copy unrelated content")
+        images.append(normalized)
+    return images
+
+
 def _slide_image_groups(
     slide: Dict[str, Any],
     *,
     number: int,
     global_style_reference: Optional[Dict[str, Any]],
     base_dir: Path,
-) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
     refs = _reference_images(
         slide,
         slide_number=number,
@@ -197,13 +207,16 @@ def _slide_image_groups(
         base_dir=base_dir,
     )
     required = _required_images(slide, slide_number=number, base_dir=base_dir)
+    placement = _placement_images(slide, slide_number=number, base_dir=base_dir)
     if not refs:
         _die(f"Slide {number}: reference_images must include at least one approved visual reference.")
     for index, image in enumerate(refs, start=1):
         _ensure_viewable_image(str(image.get("path") or image.get("attachment") or ""), slide_number=number, image_index=index, image_group="reference_images")
     for index, image in enumerate(required, start=1):
         _ensure_viewable_image(str(image.get("path") or image.get("attachment") or ""), slide_number=number, image_index=index, image_group="required_images")
-    return refs, required
+    for index, image in enumerate(placement, start=1):
+        _ensure_viewable_image(str(image.get("path") or image.get("attachment") or ""), slide_number=number, image_index=index, image_group="placement_images")
+    return refs, required, placement
 
 
 def _sample_generation_method(spec: Dict[str, Any], *, base_dir: Path) -> Optional[Dict[str, Any]]:
@@ -306,7 +319,7 @@ def _build_prompt(
 ) -> str:
     title = str(slide.get("title") or f"Slide {number}").strip()
     style = deck.get("style", {})
-    reference_images, required_images = _slide_image_groups(
+    reference_images, required_images, placement_images = _slide_image_groups(
         slide,
         number=number,
         global_style_reference=global_style_reference,
@@ -340,6 +353,10 @@ def _build_prompt(
     if required_images:
         prompt_parts.append("## Required Client Images\n")
         prompt_parts.append(_format_input_images(required_images))
+        prompt_parts.append("\n")
+    if placement_images:
+        prompt_parts.append("## Placement Images\n")
+        prompt_parts.append(_format_input_images(placement_images))
         prompt_parts.append("\n")
 
     prompt_parts.extend(
@@ -379,6 +396,14 @@ def _build_prompt(
             "important labels, arrows, data, and relationships recognizable.\n"
         )
 
+    if placement_images:
+        prompt_parts.append(
+            "## Placement Evidence Rules\n"
+            "Use placement images to understand where supplied assets appeared in the source. "
+            "Do not copy unrelated text or artifacts from placement images unless the slide text "
+            "or required image rules explicitly ask for them.\n"
+        )
+
     prompt_parts.append(
         "## Universal Constraints\n"
         "- The final image itself must contain the title and key points.\n"
@@ -396,13 +421,13 @@ def _job_images(
     global_style_reference: Optional[Dict[str, Any]],
     base_dir: Path,
 ) -> List[Dict[str, Any]]:
-    reference_images, required_images = _slide_image_groups(
+    reference_images, required_images, placement_images = _slide_image_groups(
         slide,
         number=number,
         global_style_reference=global_style_reference,
         base_dir=base_dir,
     )
-    return reference_images + required_images
+    return reference_images + required_images + placement_images
 
 
 def _write_template(path: Path) -> None:
@@ -572,13 +597,13 @@ def main() -> int:
             global_style_reference=slide_style_reference,
             base_dir=spec_dir,
         )
-        reference_images, required_images = _slide_image_groups(
+        reference_images, required_images, placement_images = _slide_image_groups(
             slide,
             number=number,
             global_style_reference=slide_style_reference,
             base_dir=spec_dir,
         )
-        images = reference_images + required_images
+        images = reference_images + required_images + placement_images
         job = {
             "slide": number,
             "title": slide.get("title", f"Slide {number}"),
@@ -591,6 +616,7 @@ def main() -> int:
             },
             "reference_images": reference_images,
             "required_images": required_images,
+            "placement_images": placement_images,
             "input_images": images,
             "requires_context_images": bool(images),
             "expected_backend": selected_backend,
@@ -608,6 +634,7 @@ def main() -> int:
                     "manually composited text/image overlays",
                 ],
                 "must_return": ["backend_used", "selected_source", "qa_note"],
+                "worker_model": "one subagent per slide when subagents are available",
             },
         }
         prompt_path = prompts_dir / f"slide_{number:02d}.json"
@@ -651,6 +678,7 @@ def main() -> int:
                 "out": rel_to_deck(out_dir, final_image),
                 "reference_images": reference_images,
                 "required_images": required_images,
+                "placement_images": placement_images,
                 "input_images": images,
                 "requires_context_images": bool(images),
                 "status": status,
