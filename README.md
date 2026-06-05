@@ -22,18 +22,6 @@ This skill includes the shared codex-ppt machinery for backend selection, prompt
 
 Converts images, PDFs, or image-based PPT/PPTX files into a high-fidelity editable PowerPoint using imagegen-first layered reconstruction.
 
-## Why The PPT Workflow Was Merged
-
-The old PPT process used three separate skills:
-
-- `ppt-plan-order`
-- `ppt-style-sample`
-- `ppt-full-production`
-
-That split made handoff quality fragile. Planning could describe slide intent without carrying exact slide content, sample slides could drift into unrelated designs, and production workers could accidentally invent client-like products or imagery when real client assets were missing.
-
-`ppt-complete-workflow` keeps the whole job under one source of truth: `ppt_plan.md`.
-
 ## Key Guardrails
 
 The unified workflow enforces several rules that are important for client work:
