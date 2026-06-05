@@ -1,4 +1,0 @@
-interface:
-  display_name: "PPT Style Sample"
-  short_description: "Generate and iterate PPT sample slides."
-  default_prompt: "Create three PPT sample slides from this plan."

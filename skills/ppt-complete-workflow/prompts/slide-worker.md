@@ -1,6 +1,6 @@
 # Slide Worker Prompt
 
-Use this template when dispatching a slide subagent after the sample slide is approved and full-deck generation is authorized.
+Use this template when dispatching a slide subagent for a sample slide or an approved full-production slide.
 
 ```text
 Generate slide <N> for this codex-ppt deck.
@@ -21,6 +21,9 @@ Sample generation method copied from the approved sample:
 Input images already prepared by the parent:
 - <absolute path> - approved sample slide style reference; match style only, do not copy layout
 - <absolute path> - strict input asset; preserve labels/data/arrows/content
+Actual image handoff:
+- Built-in image mode: the parent has inspected or attached each listed local image before dispatch and labels the visible images in this handoff.
+- CLI/API fallback mode: the listed paths are available to the fallback command as image inputs.
 
 Read the JSON job file, then follow its `prompt` field exactly. Use the selected image backend and the recorded sample generation method only.
 You must produce the final slide candidate by calling the selected image generation backend:
@@ -33,9 +36,13 @@ Forbidden for final slide image creation:
 - SVG, HTML/CSS, or canvas screenshots
 - python-pptx/PptxGenJS/native PPT layout screenshots
 - manually composited text, card, chart, or image overlays
+- generating a blank/background slide first and then placing text, charts, client images, or shapes on top with local tools
 
 If you cannot use the selected image backend, stop and return `blocker=<reason>` instead of creating a lower-quality replacement.
 If you cannot follow the recorded sample generation method, stop and return `blocker=<reason>` instead of switching tools.
+If a required input image is only named as a path and is not actually visible, attached, or usable by the selected backend, stop and return `blocker=<reason>` instead of generating from text alone.
+Do not invent, redraw, or approximate client products, people, logos, screenshots, charts, certificates, or other identifiable client assets. If the slide lacks a real supplied asset for those things, use abstract, typographic, geometric, diagrammatic, or non-identifiable visuals instead.
+If the job says a supplied image must be exact, preserve its content and identity; only crop, fit, or color-balance when allowed by the job's asset fidelity rule.
 Do not edit slide job files, origin_image, speech.md, or assemble the PPT.
 
 Before returning, visually check:

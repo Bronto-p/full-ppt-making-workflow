@@ -126,7 +126,7 @@ def _parse_images(raw: str, *, base_dir: Path, allow_missing: bool) -> List[Dict
         stripped = line.strip()
         if not stripped:
             continue
-        match = re.match(r"^-?\s*(Path|Role|Use on slide):\s*(.*)$", stripped, re.IGNORECASE)
+        match = re.match(r"^-?\s*(Path|Role|Use on slide|Asset fidelity rule):\s*(.*)$", stripped, re.IGNORECASE)
         if not match:
             continue
         key = match.group(1).lower()
@@ -139,6 +139,8 @@ def _parse_images(raw: str, *, base_dir: Path, allow_missing: bool) -> List[Dict
             current["role"] = value
         elif key == "use on slide":
             current["use"] = value
+        elif key == "asset fidelity rule":
+            current["fidelity"] = value
     if current.get("path"):
         images.append(current)
 
@@ -150,11 +152,13 @@ def _parse_images(raw: str, *, base_dir: Path, allow_missing: bool) -> List[Dict
         _ensure_path(path, label="planned slide image asset", allow_missing=allow_missing)
         role_parts = [image.get("role", "").strip(), image.get("use", "").strip()]
         role = "; ".join(part for part in role_parts if part) or "planned slide image asset"
+        fidelity = image.get("fidelity", "").strip()
         normalized.append(
             {
                 "path": str(path),
                 "role": f"strict input asset; {role}",
-                "fidelity": "preserve the supplied image content while fitting it into the slide composition",
+                "fidelity": fidelity
+                or "preserve the supplied image content while fitting it into the slide composition",
             }
         )
     return normalized

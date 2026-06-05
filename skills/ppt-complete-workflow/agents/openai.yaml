@@ -1,0 +1,4 @@
+interface:
+  display_name: "PPT Complete Workflow"
+  short_description: "Plan, sample, and produce client PPT decks"
+  default_prompt: "Use $ppt-complete-workflow to inspect my client order folder, write an exact-content PPT plan, generate approved samples, and produce the final deck."
