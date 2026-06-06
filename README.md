@@ -18,6 +18,10 @@ Runs the full client PPT workflow:
 
 This skill includes the shared codex-ppt machinery for backend selection, prompt preparation, slide worker handoff, state recording, QA, speaker notes, and final PPTX assembly.
 
+### `image-to-editable-ppt`
+
+Converts slide screenshots, images, PDFs, or image-based PowerPoint/PPTX files into high-fidelity editable PowerPoint decks with imagegen visual layers, native editable main text, preserved speaker notes, manifest validation, and page-level reconstruction workers.
+
 ## Key Guardrails
 
 The unified workflow enforces several rules that are important for client work:
@@ -34,10 +38,17 @@ The unified workflow enforces several rules that are important for client work:
 
 ```text
 skills/
-└── ppt-complete-workflow/
+├── ppt-complete-workflow/
+│   ├── SKILL.md
+│   ├── agents/openai.yaml
+│   ├── docs/
+│   ├── prompts/
+│   ├── references/
+│   ├── scripts/
+│   └── requirements.txt
+└── image-to-editable-ppt/
     ├── SKILL.md
     ├── agents/openai.yaml
-    ├── docs/
     ├── prompts/
     ├── references/
     ├── scripts/
@@ -51,6 +62,7 @@ Copy the skill folders you want into your Codex skills directory:
 ```bash
 mkdir -p ~/.codex/skills
 cp -R skills/ppt-complete-workflow ~/.codex/skills/
+cp -R skills/image-to-editable-ppt ~/.codex/skills/
 ```
 
 Restart Codex or reload skills after copying.
