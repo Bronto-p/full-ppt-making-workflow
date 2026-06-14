@@ -36,7 +36,9 @@ Full workflow means the full control loop for the requested scope, not necessari
 
 If the request references a relative range such as "last three pages", first determine the source deck's total slide count and convert it to exact slide numbers in `Requested scope:`. If the range cannot be determined, stop and ask for the missing source deck or slide range.
 
-For existing PPT/PPTX redesign jobs, treat the source deck as client content. Extract or render the requested slides when possible, preserve the actual text/data/order, and use neighboring or whole-deck slides only as context unless they are also in scope.
+For existing PPT/PPTX redesign jobs, treat the source deck as client content. Extract the requested slides' actual text/data/order and the original embedded media files when possible, preserve them, and use neighboring or whole-deck slides only as context unless they are also in scope.
+
+Rendered whole-slide images are page-state references only. They may be used to understand layout, detect off-canvas content, compare before/after results, or guide style matching, but they are not client image assets and must not be cropped into substitute assets. If the slide contains photos, certificates, documents, charts, screenshots, logos, or other client materials, extract the original embedded images from the PPT/PPTX package relationships/media or equivalent structured API instead of cropping them from a slide render.
 
 ## Core Rule
 
@@ -54,6 +56,14 @@ Accept an order folder containing any mix of:
 - logos, product photos, portraits, certificates, charts, UI screenshots, and other client assets
 
 Start from the client requirement file when identifiable. If the user directly names a PPT/PPTX and a slide range, start from that deck and range. Then inspect the folder and connect every relevant file to requirements, slide content, template/reference use, or image use.
+
+For PPT/PPTX sources, classify extracted media before planning:
+
+- `content asset`: client photos, proof documents, certificates, charts, screenshots, paper images, product images, portraits, application proofs, or any image the slide content depends on.
+- `decorative/template asset`: backgrounds, wave shapes saved as pictures, header strips, repeated logos, design ornaments, page chrome, and other theme materials.
+- `whole-slide reference`: rendered slide images used only to inspect current layout and off-page/overflow problems.
+
+Only `content asset` files belong under slide `Images` unless the slide explicitly needs an exact logo/header image. Decorative/template assets belong under `Template/reference files` or `Overall template/style`. Whole-slide references belong under `Template/reference files` or `Main source files`; never list them as content images.
 
 ## Outputs
 
@@ -135,6 +145,9 @@ Always create or update `ppt_plan.md` with this structure. For selected-slide jo
 
 - Use local paths for every referenced source, template, reference image, and client image asset.
 - If a slide has no client image asset, write `Images: none`.
+- For existing PPT/PPTX files, extract original embedded media files from the deck package/relationships or structured presentation APIs. Do not crop photos, certificates, tables, screenshots, documents, logos, or paper images out of a rendered whole-slide image when the original embedded media is available.
+- Do not list background images, page chrome, repeated title bars, decorative wave images, or whole-slide renders as slide `Images` unless they are required exact client content. Put them in `Template/reference files` or describe them in `Overall template/style`.
+- If an extracted image is a background, decorative header, logo strip, or theme ornament, label it as a `decorative/template asset`; do not treat it as proof material, document evidence, or client content.
 - Do not describe or request "client product-like", "similar product", "product-style", "brand-like", "company-like", "realistic client background", or any fake substitute.
 - If the plan says not to use a client photo/product/logo, the visual direction must not ask for anything resembling that client photo/product/logo.
 - Client products, people, logos, certificates, charts, UI screenshots, and identifiable brand materials may appear only when an actual supplied file is listed in `Images` for that slide.
@@ -151,11 +164,21 @@ Before sample generation, scan `ppt_plan.md` and fix failures:
 
 - any slide `Content` is only a topic description
 - any slide asks for fake or lookalike client/product imagery
+- any whole-slide render or cropped screenshot is listed as a content image instead of a reference
+- any decorative/template asset is misclassified as proof/client content
 - any existing asset path is missing or unassigned when its intended slide is clear
 - `Template/reference path` or `Images` invents a path
 - the slide layout conflicts with the asset truth rule
 
 Do not proceed to samples if any slide contains `NEEDS SOURCE`.
+
+### Plan Approval Gate
+
+After `ppt_plan.md` passes Planning QA, stop and report the plan to the user. This report is a confirmation gate, not a progress update.
+
+Do not create `sample_plan.md`, generate samples, edit the source deck, create final slide images, assemble/update a PPTX, or produce any draft/final PPT output until the user explicitly confirms the plan or explicitly waives the planning gate. Phrases such as "继续", "确认", "按这个计划做", "可以生成样张", "skip approval", or an equivalent explicit instruction count as approval. Silence, inferred urgency, or a small selected-slide scope does not count as approval.
+
+If the user changes the requested scope, content, style, asset usage, or output format during this gate, update `ppt_plan.md`, run Planning QA again, and ask for confirmation again.
 
 ## Phase 2: Sequential Sample Round
 
@@ -374,7 +397,7 @@ Read these only when needed:
 
 ## Final Responses
 
-After planning, report the `ppt_plan.md` path, job mode, requested scope, slide count, assigned template/reference files, assigned image assets, and that no PPT has been generated.
+After planning, report the `ppt_plan.md` path, job mode, requested scope, slide count, assigned template/reference files, assigned image assets, and that no PPT has been generated. End by explicitly asking the user to confirm the plan before samples or production. Do not continue past this point until the user confirms or explicitly waives this gate.
 
 After each sample round, report the sample round folder, sample image paths, whether `ppt_plan.md` changed, pending feedback, and that no final deck was generated.
 
