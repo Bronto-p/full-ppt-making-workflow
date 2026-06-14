@@ -1,24 +1,48 @@
 ---
 name: ppt-complete-workflow
-description: "Run the full client PPT workflow in one skill: inspect an order folder, write an exact-content ppt_plan.md, generate sequential style samples with a shared visual reference, collect approval, then produce the final image-based PPT/PPTX deck. Use when the user wants PPT planning, sample slides, full production, or the whole plan-to-deck workflow from client documents, templates, images, logos, screenshots, charts, or other order assets."
+description: "Run the full client PPT workflow for any PPT job: new decks, whole-deck redesigns, selected-slide redesigns, continuation of an existing workflow, sample rounds, production, QA, or assembly. Inspect the available files, define the exact scope, write or update an exact-content ppt_plan.md for that scope, generate sequential style samples when approval is needed, collect approval, then produce the requested image-based PPT/PPTX output. Use when the user wants PPT planning, beautification, redesign, polishing, sample slides, full production, or plan-to-deck work from existing PPT/PPTX files, client documents, templates, images, logos, screenshots, charts, or other order assets."
 ---
 
 # PPT Complete Workflow
 
 ## Purpose
 
-Turn a client order folder into a finished image-based `.pptx` through one controlled workflow:
+Handle any client PPT job through one controlled workflow that scales to the request. The job may be a new deck, a full redesign, a selected-slide redesign, a sample-only round, a continuation from existing workflow files, or final production.
 
-1. Plan the deck in `ppt_plan.md`.
+The controlled workflow is:
+
+1. Define the job scope and plan the requested deck or slide range in `ppt_plan.md`.
 2. Generate a sample round, using Sample 1 as the visual anchor for Samples 2 and 3.
 3. Update the plan from feedback until the user approves the sample direction.
-4. Produce every final slide image and assemble the PowerPoint.
+4. Produce every requested final slide image and assemble or update the PowerPoint output.
 
 This skill replaces the old split workflow of `ppt-plan-order`, `ppt-style-sample`, and `ppt-full-production`.
+
+## Scope Rule
+
+Before planning, identify the job mode and write it into `ppt_plan.md` under `Deck Requirements` as `Job mode:` and `Requested scope:`.
+
+Supported job modes:
+
+- `new deck`: create a deck from source documents and assets.
+- `whole-deck redesign`: redesign all slides from an existing PPT/PPTX.
+- `selected-slide redesign`: redesign only specified slides, such as "last three pages", "slides 8-10", or "the appendix".
+- `continuation`: continue from existing `ppt_plan.md`, sample files, approved samples, or production files.
+- `sample-only`: create style samples without final production.
+- `production-only`: produce final slides from an already approved plan and sample reference.
+- `QA/repair`: inspect, compare, fix, or regenerate existing sample/final slides.
+
+Full workflow means the full control loop for the requested scope, not necessarily a brand-new deck. For selected-slide jobs, inspect the whole source deck enough to understand context, theme, numbering, and neighboring slides, but plan and produce only the requested slides unless the user asks to change the whole deck.
+
+If the request references a relative range such as "last three pages", first determine the source deck's total slide count and convert it to exact slide numbers in `Requested scope:`. If the range cannot be determined, stop and ask for the missing source deck or slide range.
+
+For existing PPT/PPTX redesign jobs, treat the source deck as client content. Extract or render the requested slides when possible, preserve the actual text/data/order, and use neighboring or whole-deck slides only as context unless they are also in scope.
 
 ## Core Rule
 
 `ppt_plan.md` is the source of truth. Slide workers must not infer missing content, invent client products, invent client photos, or replace required client assets with lookalikes.
+
+For partial PPT jobs, `ppt_plan.md` is still required, but it may cover only the requested slide range. Do not skip planning because the job is small.
 
 ## Inputs
 
@@ -29,11 +53,11 @@ Accept an order folder containing any mix of:
 - template decks, rendered template pages, style references, screenshots
 - logos, product photos, portraits, certificates, charts, UI screenshots, and other client assets
 
-Start from the client requirement file when identifiable, then inspect the folder and connect every relevant file to deck requirements, slide content, template/reference use, or image use.
+Start from the client requirement file when identifiable. If the user directly names a PPT/PPTX and a slide range, start from that deck and range. Then inspect the folder and connect every relevant file to requirements, slide content, template/reference use, or image use.
 
 ## Outputs
 
-Create or update these files in the order folder:
+Create or update these files in the order folder as needed for the job mode:
 
 ```text
 ppt_plan.md
@@ -43,6 +67,8 @@ approved_sample_reference.md
 samples/
 production/{deck_name}/
 ```
+
+For selected-slide redesigns, use a deck name that makes the scope clear, such as `{source_name}_slides_08-10_redesign`, and preserve a traceable link to the original source deck in `ppt_plan.md`.
 
 Final production output lives under:
 
@@ -60,12 +86,16 @@ production/{deck_name}/
 
 ## Phase 1: Plan
 
-Always create or update `ppt_plan.md` with this structure:
+Always create or update `ppt_plan.md` with this structure. For selected-slide jobs, include only the requested slides in `Slide Plan`, using their original slide numbers.
 
 ```markdown
 # PPT Plan
 
 ## Deck Requirements
+- Job mode:
+- Requested scope:
+- Source deck:
+- Source deck slide count:
 - Goal:
 - Audience:
 - Slide count:
@@ -78,7 +108,8 @@ Always create or update `ppt_plan.md` with this structure:
 
 ## Slide Plan
 
-### Slide 1: {slide title}
+### Slide {original or output slide number}: {slide title}
+- Source slide:
 - Content:
 - Template/theme:
 - Page layout/structure:
@@ -95,6 +126,7 @@ Always create or update `ppt_plan.md` with this structure:
 - `Content` must contain the exact slide-ready text, numbers, labels, data points, claims, and section headings intended to appear on the slide.
 - Do not write only descriptions such as "introduce the product", "show the team background", "summarize the market", or "explain the process".
 - If the client supplied page-by-page content, preserve the order and copy the actual text/data for each page into the matching slide's `Content`.
+- If the client supplied an existing PPT/PPTX, extract the actual text, numbers, labels, titles, and data from each requested source slide into `Content`; do not replace it with a summary such as "beautify this slide".
 - If the client supplied long-form material, break it into slides and write the exact extracted/condensed slide text for each slide, not a topic summary.
 - If a slide depends on a table, chart, timeline, process, quote, product name, certificate text, or UI copy, include the actual values or labels in `Content`.
 - If content is unreadable or missing, write `Content: NEEDS SOURCE - {specific missing item}` and stop before sample or production until the missing source is resolved.
@@ -127,7 +159,13 @@ Do not proceed to samples if any slide contains `NEEDS SOURCE`.
 
 ## Phase 2: Sequential Sample Round
 
-Create a three-slide sample round by default. If the deck has fewer than three slides, sample every slide.
+Create a three-slide sample round by default for new decks and whole-deck redesigns. If the requested scope has fewer than three slides, sample every requested slide.
+
+For selected-slide redesigns:
+
+- If exactly one to three slides are in scope, the sample round should normally use those same slides.
+- Do not treat a small scope as permission to skip the workflow; still create `sample_plan.md`, generate sequentially, QA, show the user, and wait for approval before final assembly unless the user explicitly asked to skip approval.
+- If the user asked for a quick direct edit and explicitly waived samples, record that waiver in `sample_feedback.md` or `approved_sample_reference.md`, then continue with production for the requested scope only.
 
 Pick:
 
@@ -250,7 +288,7 @@ Write `approved_sample_reference.md` after user approval:
 
 ## Phase 3: Full Production
 
-Do not produce the final deck before the user approves samples.
+Do not produce the final deck or final selected-slide output before the user approves samples, unless the user explicitly waived sample approval for this job.
 
 1. Preflight `ppt_plan.md`, `approved_sample_reference.md`, and `samples/approved/`.
 2. Treat `ppt_plan.md` as authoritative for exact slide content, layout, template/reference path, image path, image role, placement, and asset fidelity.
@@ -291,6 +329,8 @@ python3 scripts/assemble_ppt.py \
   --aspect-ratio 16:9
 ```
 
+For selected-slide redesigns, production covers only the requested slides. If updating the original deck is required, preserve unchanged slides and replace only the requested slide numbers. If the assembly scripts cannot safely replace selected slides, create a scoped output deck with the redesigned slides and clearly report that it is not a full replacement deck.
+
 ## Worker Handoff Rules
 
 - Before dispatching workers, read `docs/slide-generation-and-subagents.md` and `prompts/slide-worker.md`.
@@ -302,6 +342,8 @@ python3 scripts/assemble_ppt.py \
 ## Hard Constraints
 
 - Never let slide content remain as topic-only descriptions in the plan.
+- Never skip `ppt_plan.md` for selected-slide beautification, polishing, or redesign requests.
+- Never expand a selected-slide request into a whole-deck rewrite unless the user approves that expanded scope.
 - Never use fake/lookalike client products, people, logos, screenshots, charts, or certificates.
 - Never generate a slide from a text-only path when the slide requires actual image content.
 - Every sample and final slide image must be one complete 16:9 full-slide image generated by the selected image backend.
@@ -332,7 +374,7 @@ Read these only when needed:
 
 ## Final Responses
 
-After planning, report the `ppt_plan.md` path, slide count, assigned template/reference files, assigned image assets, and that no PPT has been generated.
+After planning, report the `ppt_plan.md` path, job mode, requested scope, slide count, assigned template/reference files, assigned image assets, and that no PPT has been generated.
 
 After each sample round, report the sample round folder, sample image paths, whether `ppt_plan.md` changed, pending feedback, and that no final deck was generated.
 
