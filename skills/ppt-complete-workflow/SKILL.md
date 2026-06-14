@@ -251,26 +251,33 @@ Write `sample_plan.md`:
 ### Sequential Sample Rules
 
 - Generate Sample 1 first.
+- Sample generation must use the same worker handoff discipline as production. The parent agent prepares the sample job and dispatches exactly one slide worker/subagent for Sample 1 whenever subagents are available in the current runtime.
+- The parent agent must not generate a sample slide directly when subagents are available. The parent owns planning, asset extraction, job packaging, dispatch, state recording, visual QA, and reporting only.
 - Inspect Sample 1 for content accuracy, text legibility, style quality, and asset fidelity.
 - If Sample 1 is wrong, repair or regenerate it before making Sample 2 or Sample 3.
 - After Sample 1 passes agent QA, attach the actual Sample 1 image as `Required style reference` for Sample 2 and Sample 3.
-- Generate Sample 2 and Sample 3 using Sample 1 as the shared style reference, plus their own required slide assets.
+- Generate Sample 2 and Sample 3 using Sample 1 as the shared style reference, plus their own required slide assets. Dispatch each sample through a slide worker/subagent when subagents are available; do not generate them directly in the parent agent.
 - Sample 2 and Sample 3 must match Sample 1's design system: typography, spacing, color behavior, density, image treatment, and visual language.
 - Sample 2 and Sample 3 must not copy Sample 1's content or product/photo unless their own slide plan lists the same required asset.
 - Do not start three independent sample workers in parallel. The first sample must exist before the other two are dispatched.
+- If subagents are unavailable, record the unavailability in `sample_feedback.md` and stop before generation unless the user explicitly approves parent-agent generation for this round.
+- If the selected image backend cannot use a required source image, record a blocker instead of creating a text-only, locally composed, or approximate sample.
 
 ### Sample Workflow
 
 1. Preflight the selected sample slides against the Planning QA rules.
 2. Select the image backend. Read `docs/backend-selection.md` when needed.
-3. Create `samples/round_XX/sample_spec.json` and prompt jobs.
-4. Generate and QA Sample 1.
-5. Add Sample 1 as a visible/attached style reference for Sample 2 and Sample 3.
-6. Generate and QA Sample 2 and Sample 3.
-7. Show all samples to the user and ask whether style, layout structure, image usage, and text quality pass.
-8. Append feedback to `sample_feedback.md`.
-9. If feedback changes content, theme, layout, template choice, image usage, density, or page structure, update `ppt_plan.md` before the next round.
-10. When the user approves, copy approved images to `samples/approved/` and write `approved_sample_reference.md`.
+3. Read `docs/slide-generation-and-subagents.md` and `prompts/slide-worker.md` before creating sample jobs or dispatching workers.
+4. Create `samples/round_XX/sample_spec.json` and one self-contained prompt job per sample slide. Each job must list `prompt`, `out`, `input_images`, `requires_context_images`, selected backend, and asset-fidelity rules.
+5. Dispatch Sample 1 to a slide worker/subagent when subagents are available. The worker must call the selected image backend and return only the selected generated image path, backend used, and QA note.
+6. Parent agent visually QA's Sample 1, records result/blocker, and repairs by dispatching a revised worker job if needed.
+7. Add Sample 1 as a visible/attached style reference for Sample 2 and Sample 3.
+8. Dispatch Sample 2 and Sample 3 through slide workers/subagents, using Sample 1 as the shared style reference.
+9. Parent agent visually QA's Sample 2 and Sample 3 and records results/blockers.
+10. Show all samples to the user and ask whether style, layout structure, image usage, and text quality pass.
+11. Append feedback to `sample_feedback.md`.
+12. If feedback changes content, theme, layout, template choice, image usage, density, or page structure, update `ppt_plan.md` before the next round.
+13. When the user approves, copy approved images to `samples/approved/` and write `approved_sample_reference.md`.
 
 ## Approved Sample Reference
 
@@ -356,9 +363,9 @@ For selected-slide redesigns, production covers only the requested slides. If up
 
 ## Worker Handoff Rules
 
-- Before dispatching workers, read `docs/slide-generation-and-subagents.md` and `prompts/slide-worker.md`.
+- Before dispatching sample or production workers, read `docs/slide-generation-and-subagents.md` and `prompts/slide-worker.md`.
 - Before using client images, read `docs/user-supplied-assets.md`.
-- In built-in image mode, call `view_image` for approved sample images and required slide assets, then label visible images by role in the worker handoff.
+- In built-in image mode, call `view_image` for approved sample images and required slide assets, then label visible images by role in the worker handoff. If the current built-in image tool cannot actually receive or see a required source image, do not use it for that slide.
 - In CLI/API fallback mode, verify that each image path is passed as an image input; otherwise record a blocker.
 - If a worker cannot access a required image, record a blocker instead of generating a fake substitute.
 
@@ -370,8 +377,12 @@ For selected-slide redesigns, production covers only the requested slides. If up
 - Never use fake/lookalike client products, people, logos, screenshots, charts, or certificates.
 - Never generate a slide from a text-only path when the slide requires actual image content.
 - Every sample and final slide image must be one complete 16:9 full-slide image generated by the selected image backend.
+- Samples are production-grade visual outputs, not sketches. Do not create "temporary", "local", "layout-only", or "for review only" sample slides with non-image-generation methods.
+- The parent agent must not use HTML/CSS screenshots, SVG/canvas rendering, Pillow, python-pptx, PptxGenJS, Keynote/PowerPoint screenshots, or manual overlays for sample or final slide image creation.
 - Do not generate separate slide parts and assemble them locally.
 - Do not use local drawing, SVG, HTML/CSS/canvas screenshots, Pillow, python-pptx, PptxGenJS, or manual overlays as substitutes for image-backend slide generation.
+- Do not fall back from a strict source-image slide to a text-only image generation prompt. If the selected backend cannot attach the required source image, stop and report the backend/image-input blocker.
+- Do not present a locally rendered layout as a valid sample round output. If such a diagnostic artifact is made for internal debugging, keep it out of `samples/round_XX/origin_image/` and clearly label it as non-sample.
 - Do not change the approved backend/method during production unless the user explicitly approves.
 - Do not assemble `.pptx` while any slide is pending, dispatched, blocked, or missing.
 - Do not call samples approved from the agent's judgment. Approval must come from the user.

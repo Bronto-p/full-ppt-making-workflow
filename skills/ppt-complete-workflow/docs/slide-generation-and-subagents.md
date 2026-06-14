@@ -2,9 +2,43 @@
 
 Read this before full-deck image generation, preparing slide jobs, dispatching subagents, recording results, or handling blockers.
 
-## Final Slide Image Generation
+## Image Generation Boundary
 
-Generate one image per slide with the selected image backend. Every final `slide_XX.png` must be produced by the built-in image tool or by `scripts/image_gen.py`; programmatic rendering or hybrid text overlay is not acceptable for slide image creation.
+Generate one image per slide with the selected image backend. Every sample and final `slide_XX.png` must be produced by the built-in image tool or by `scripts/image_gen.py`; programmatic rendering or hybrid text overlay is not acceptable for slide image creation.
+
+This boundary applies to samples as strictly as final production. A sample slide is not a wireframe, local layout proof, browser screenshot, PowerPoint screenshot, or manually composited mockup. If the selected image backend cannot generate the requested sample with its required source images, record a blocker and stop instead of producing a lower-quality substitute.
+
+Forbidden for sample and final slide image creation:
+
+- local drawing or rendering scripts
+- HTML/CSS/SVG/canvas screenshots
+- Pillow-generated slides
+- python-pptx/PptxGenJS/native PPT layout screenshots
+- manually composited text, chart, card, or image overlays
+- generating a background first and then placing text, client images, charts, or shapes on top with local tools
+
+## Sample Slide Image Generation
+
+For every sample round, the parent agent prepares sample jobs and delegates image creation to a slide worker/subagent whenever subagents are available in the current runtime. The parent agent does not directly generate sample slides when subagents can be spawned.
+
+Parent agent responsibilities for samples:
+
+- Write `sample_plan.md` and `samples/round_XX/sample_spec.json`.
+- Write one self-contained sample job file under `samples/round_XX/prompts/slide_XX.json`.
+- Include `prompt`, `out`, `input_images`, `requires_context_images`, selected backend, sample-generation method, and asset-fidelity rules in each job.
+- Read `../prompts/slide-worker.md` and use that handoff template for each sample worker.
+- Dispatch exactly one worker for Sample 1 first.
+- Record the worker result or blocker in `sample_feedback.md`.
+- Visually QA the returned generated image.
+- Only after Sample 1 passes QA, use it as the style reference for Sample 2 and Sample 3 worker jobs.
+
+Subagent responsibilities for samples are the same as production: read exactly the assigned job, use only the selected image backend, preserve required source images, visually QA the candidate, and return only backend provenance, selected source path, and a QA note.
+
+If subagents are unavailable, stop before sample generation unless the user explicitly approves parent-agent generation for that round. If approved, the parent must still use the selected image backend directly; it must not use local rendering or manual composition.
+
+If a sample slide has strict source images, the selected backend must actually receive or see those images. A local path in a prompt is not enough. If image input cannot be attached or made visible to the backend, record a blocker instead of generating from text alone.
+
+## Final Slide Image Generation
 
 After the outline, visual style, image backend, and sample slide have all been approved, create final downstream artifacts if they do not already exist:
 
@@ -124,7 +158,7 @@ If preparing prompts manually instead of using `prepare_slide_prompts.py`, still
 
 ## Parallel Slide Generation With Subagents
 
-After the user approves the sample slide and full-deck generation is authorized, slide subagents are mandatory whenever the current runtime can spawn them. Use one subagent per remaining slide image job. Do not generate the remaining deck sequentially merely for convenience. If subagents cannot be spawned, stop at the dispatch step and report a blocker instead of producing a lower-quality sequential deck.
+Slide subagents are mandatory for sample generation and final production whenever the current runtime can spawn them. Use one subagent per slide image job, with Sample 1 dispatched first by itself. Do not generate slides sequentially in the parent agent merely for convenience. If subagents cannot be spawned, stop at the dispatch step and report a blocker instead of producing a lower-quality sequential deck or sample round.
 
 Use the slide state scripts as the dispatch contract: the main agent spawns workers, then records dispatch and result state. A slide is not considered dispatched or complete until the relevant script records it.
 
@@ -148,7 +182,7 @@ Subagent responsibilities:
 
 - Read exactly the assigned `prompts/slide_XX.json`.
 - Use the selected image backend only; do not switch between built-in image generation and CLI/API fallback.
-- Follow the `sample_generation_method` from the assigned job. Use the same tool family, generation/edit mode, image context preparation, and model/config details that produced the approved sample.
+- Follow the `sample_generation_method` from the assigned job. For Sample 1, this is the candidate method selected by the parent. For later samples and production, use the same tool family, generation/edit mode, image context preparation, and model/config details that produced the approved sample.
 - Generate the final slide candidate by calling the selected image generation backend. Do not create final slide images with local drawing, HTML/SVG/canvas screenshots, Pillow, python-pptx/PptxGenJS layouts, or manually composited text/image overlays.
 - Treat the approved sample slide as style reference only.
 - Treat any required source images as strict input assets and preserve their content according to the prompt.
