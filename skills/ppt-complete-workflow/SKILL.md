@@ -36,7 +36,9 @@ Full workflow means the full control loop for the requested scope, not necessari
 
 If the request references a relative range such as "last three pages", first determine the source deck's total slide count and convert it to exact slide numbers in `Requested scope:`. If the range cannot be determined, stop and ask for the missing source deck or slide range.
 
-For existing PPT/PPTX redesign jobs, treat the source deck as client content. Extract or render the requested slides when possible, preserve the actual text/data/order, and use neighboring or whole-deck slides only as context unless they are also in scope.
+For existing PPT/PPTX redesign jobs, treat the source deck as client content. Extract the requested slides' actual text/data/order and the original embedded media files when possible, preserve them, and use neighboring or whole-deck slides only as context unless they are also in scope.
+
+Rendered whole-slide images are page-state references only. They may be used to understand layout, detect off-canvas content, compare before/after results, or guide style matching, but they are not client image assets and must not be cropped into substitute assets. If the slide contains photos, certificates, documents, charts, screenshots, logos, or other client materials, extract the original embedded images from the PPT/PPTX package relationships/media or equivalent structured API instead of cropping them from a slide render.
 
 ## Core Rule
 
@@ -54,6 +56,14 @@ Accept an order folder containing any mix of:
 - logos, product photos, portraits, certificates, charts, UI screenshots, and other client assets
 
 Start from the client requirement file when identifiable. If the user directly names a PPT/PPTX and a slide range, start from that deck and range. Then inspect the folder and connect every relevant file to requirements, slide content, template/reference use, or image use.
+
+For PPT/PPTX sources, classify extracted media before planning:
+
+- `content asset`: client photos, proof documents, certificates, charts, screenshots, paper images, product images, portraits, application proofs, or any image the slide content depends on.
+- `decorative/template asset`: backgrounds, wave shapes saved as pictures, header strips, repeated logos, design ornaments, page chrome, and other theme materials.
+- `whole-slide reference`: rendered slide images used only to inspect current layout and off-page/overflow problems.
+
+Only `content asset` files belong under slide `Images` unless the slide explicitly needs an exact logo/header image. Decorative/template assets belong under `Template/reference files` or `Overall template/style`. Whole-slide references belong under `Template/reference files` or `Main source files`; never list them as content images.
 
 ## Outputs
 
@@ -135,6 +145,9 @@ Always create or update `ppt_plan.md` with this structure. For selected-slide jo
 
 - Use local paths for every referenced source, template, reference image, and client image asset.
 - If a slide has no client image asset, write `Images: none`.
+- For existing PPT/PPTX files, extract original embedded media files from the deck package/relationships or structured presentation APIs. Do not crop photos, certificates, tables, screenshots, documents, logos, or paper images out of a rendered whole-slide image when the original embedded media is available.
+- Do not list background images, page chrome, repeated title bars, decorative wave images, or whole-slide renders as slide `Images` unless they are required exact client content. Put them in `Template/reference files` or describe them in `Overall template/style`.
+- If an extracted image is a background, decorative header, logo strip, or theme ornament, label it as a `decorative/template asset`; do not treat it as proof material, document evidence, or client content.
 - Do not describe or request "client product-like", "similar product", "product-style", "brand-like", "company-like", "realistic client background", or any fake substitute.
 - If the plan says not to use a client photo/product/logo, the visual direction must not ask for anything resembling that client photo/product/logo.
 - Client products, people, logos, certificates, charts, UI screenshots, and identifiable brand materials may appear only when an actual supplied file is listed in `Images` for that slide.
@@ -151,11 +164,21 @@ Before sample generation, scan `ppt_plan.md` and fix failures:
 
 - any slide `Content` is only a topic description
 - any slide asks for fake or lookalike client/product imagery
+- any whole-slide render or cropped screenshot is listed as a content image instead of a reference
+- any decorative/template asset is misclassified as proof/client content
 - any existing asset path is missing or unassigned when its intended slide is clear
 - `Template/reference path` or `Images` invents a path
 - the slide layout conflicts with the asset truth rule
 
 Do not proceed to samples if any slide contains `NEEDS SOURCE`.
+
+### Plan Approval Gate
+
+After `ppt_plan.md` passes Planning QA, stop and report the plan to the user. This report is a confirmation gate, not a progress update.
+
+Do not create `sample_plan.md`, generate samples, edit the source deck, create final slide images, assemble/update a PPTX, or produce any draft/final PPT output until the user explicitly confirms the plan or explicitly waives the planning gate. Phrases such as "继续", "确认", "按这个计划做", "可以生成样张", "skip approval", or an equivalent explicit instruction count as approval. Silence, inferred urgency, or a small selected-slide scope does not count as approval.
+
+If the user changes the requested scope, content, style, asset usage, or output format during this gate, update `ppt_plan.md`, run Planning QA again, and ask for confirmation again.
 
 ## Phase 2: Sequential Sample Round
 
@@ -228,26 +251,33 @@ Write `sample_plan.md`:
 ### Sequential Sample Rules
 
 - Generate Sample 1 first.
+- Sample generation must use the same worker handoff discipline as production. The parent agent prepares the sample job and dispatches exactly one slide worker/subagent for Sample 1 whenever subagents are available in the current runtime.
+- The parent agent must not generate a sample slide directly when subagents are available. The parent owns planning, asset extraction, job packaging, dispatch, state recording, visual QA, and reporting only.
 - Inspect Sample 1 for content accuracy, text legibility, style quality, and asset fidelity.
 - If Sample 1 is wrong, repair or regenerate it before making Sample 2 or Sample 3.
 - After Sample 1 passes agent QA, attach the actual Sample 1 image as `Required style reference` for Sample 2 and Sample 3.
-- Generate Sample 2 and Sample 3 using Sample 1 as the shared style reference, plus their own required slide assets.
+- Generate Sample 2 and Sample 3 using Sample 1 as the shared style reference, plus their own required slide assets. Dispatch each sample through a slide worker/subagent when subagents are available; do not generate them directly in the parent agent.
 - Sample 2 and Sample 3 must match Sample 1's design system: typography, spacing, color behavior, density, image treatment, and visual language.
 - Sample 2 and Sample 3 must not copy Sample 1's content or product/photo unless their own slide plan lists the same required asset.
 - Do not start three independent sample workers in parallel. The first sample must exist before the other two are dispatched.
+- If subagents are unavailable, record the unavailability in `sample_feedback.md` and stop before generation unless the user explicitly approves parent-agent generation for this round.
+- If the selected image backend cannot use a required source image, record a blocker instead of creating a text-only, locally composed, or approximate sample.
 
 ### Sample Workflow
 
 1. Preflight the selected sample slides against the Planning QA rules.
 2. Select the image backend. Read `docs/backend-selection.md` when needed.
-3. Create `samples/round_XX/sample_spec.json` and prompt jobs.
-4. Generate and QA Sample 1.
-5. Add Sample 1 as a visible/attached style reference for Sample 2 and Sample 3.
-6. Generate and QA Sample 2 and Sample 3.
-7. Show all samples to the user and ask whether style, layout structure, image usage, and text quality pass.
-8. Append feedback to `sample_feedback.md`.
-9. If feedback changes content, theme, layout, template choice, image usage, density, or page structure, update `ppt_plan.md` before the next round.
-10. When the user approves, copy approved images to `samples/approved/` and write `approved_sample_reference.md`.
+3. Read `docs/slide-generation-and-subagents.md` and `prompts/slide-worker.md` before creating sample jobs or dispatching workers.
+4. Create `samples/round_XX/sample_spec.json` and one self-contained prompt job per sample slide. Each job must list `prompt`, `out`, `input_images`, `requires_context_images`, selected backend, and asset-fidelity rules.
+5. Dispatch Sample 1 to a slide worker/subagent when subagents are available. The worker must call the selected image backend and return only the selected generated image path, backend used, and QA note.
+6. Parent agent visually QA's Sample 1, records result/blocker, and repairs by dispatching a revised worker job if needed.
+7. Add Sample 1 as a visible/attached style reference for Sample 2 and Sample 3.
+8. Dispatch Sample 2 and Sample 3 through slide workers/subagents, using Sample 1 as the shared style reference.
+9. Parent agent visually QA's Sample 2 and Sample 3 and records results/blockers.
+10. Show all samples to the user and ask whether style, layout structure, image usage, and text quality pass.
+11. Append feedback to `sample_feedback.md`.
+12. If feedback changes content, theme, layout, template choice, image usage, density, or page structure, update `ppt_plan.md` before the next round.
+13. When the user approves, copy approved images to `samples/approved/` and write `approved_sample_reference.md`.
 
 ## Approved Sample Reference
 
@@ -333,9 +363,9 @@ For selected-slide redesigns, production covers only the requested slides. If up
 
 ## Worker Handoff Rules
 
-- Before dispatching workers, read `docs/slide-generation-and-subagents.md` and `prompts/slide-worker.md`.
+- Before dispatching sample or production workers, read `docs/slide-generation-and-subagents.md` and `prompts/slide-worker.md`.
 - Before using client images, read `docs/user-supplied-assets.md`.
-- In built-in image mode, call `view_image` for approved sample images and required slide assets, then label visible images by role in the worker handoff.
+- In built-in image mode, call `view_image` for approved sample images and required slide assets, then label visible images by role in the worker handoff. If the current built-in image tool cannot actually receive or see a required source image, do not use it for that slide.
 - In CLI/API fallback mode, verify that each image path is passed as an image input; otherwise record a blocker.
 - If a worker cannot access a required image, record a blocker instead of generating a fake substitute.
 
@@ -347,8 +377,12 @@ For selected-slide redesigns, production covers only the requested slides. If up
 - Never use fake/lookalike client products, people, logos, screenshots, charts, or certificates.
 - Never generate a slide from a text-only path when the slide requires actual image content.
 - Every sample and final slide image must be one complete 16:9 full-slide image generated by the selected image backend.
+- Samples are production-grade visual outputs, not sketches. Do not create "temporary", "local", "layout-only", or "for review only" sample slides with non-image-generation methods.
+- The parent agent must not use HTML/CSS screenshots, SVG/canvas rendering, Pillow, python-pptx, PptxGenJS, Keynote/PowerPoint screenshots, or manual overlays for sample or final slide image creation.
 - Do not generate separate slide parts and assemble them locally.
 - Do not use local drawing, SVG, HTML/CSS/canvas screenshots, Pillow, python-pptx, PptxGenJS, or manual overlays as substitutes for image-backend slide generation.
+- Do not fall back from a strict source-image slide to a text-only image generation prompt. If the selected backend cannot attach the required source image, stop and report the backend/image-input blocker.
+- Do not present a locally rendered layout as a valid sample round output. If such a diagnostic artifact is made for internal debugging, keep it out of `samples/round_XX/origin_image/` and clearly label it as non-sample.
 - Do not change the approved backend/method during production unless the user explicitly approves.
 - Do not assemble `.pptx` while any slide is pending, dispatched, blocked, or missing.
 - Do not call samples approved from the agent's judgment. Approval must come from the user.
@@ -374,7 +408,7 @@ Read these only when needed:
 
 ## Final Responses
 
-After planning, report the `ppt_plan.md` path, job mode, requested scope, slide count, assigned template/reference files, assigned image assets, and that no PPT has been generated.
+After planning, report the `ppt_plan.md` path, job mode, requested scope, slide count, assigned template/reference files, assigned image assets, and that no PPT has been generated. End by explicitly asking the user to confirm the plan before samples or production. Do not continue past this point until the user confirms or explicitly waives this gate.
 
 After each sample round, report the sample round folder, sample image paths, whether `ppt_plan.md` changed, pending feedback, and that no final deck was generated.
 
